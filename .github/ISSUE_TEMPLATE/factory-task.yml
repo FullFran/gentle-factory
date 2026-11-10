@@ -1,0 +1,56 @@
+name: Factory task
+description: A scoped change the software factory can turn into a draft PR once it is designed.
+title: "<type>(<scope>): <what changes>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One behavior per issue. The factory (FullFran/gentle-factory) only starts after a design comment
+        and the `factory:ready` label; until then this issue sits in the project's **Needs design** track.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem, with the requester's words quoted verbatim and dated.
+      placeholder: 'Fran (verbatim, YYYY-MM-DD): "..."'
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Change
+      description: What must be true afterwards. Observable behavior, not implementation steps.
+    validations:
+      required: true
+  - type: textarea
+    id: done_when
+    attributes:
+      label: Done when
+      description: A command that fails today and passes when this is done (the factory checks it fails first).
+      render: shell
+      placeholder: bash tests/foo-test.sh
+    validations:
+      required: true
+  - type: textarea
+    id: expected_files
+    attributes:
+      label: Expected files
+      description: Paths or globs the change may touch, one per line. Anything else stops the run.
+      placeholder: |
+        scripts/foo
+        tests/foo-test.sh
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Related issues (Parent, Blocked by), links and constraints.
+  - type: markdown
+    attributes:
+      value: |
+        ### Send it to the factory
+        Add a comment with the design block, then the `factory:ready` label:
+        ```
+        <!-- factory-design:v1 {"schema_version":"1.0","ready_signal":"factory:ready","done_when":"<command>","expected_files":["<path>"]} -->
+        ```
