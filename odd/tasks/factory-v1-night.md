@@ -23,7 +23,7 @@ Decided constraints (all 2026-11-10, recorded in FullFran/gentle-factory#1):
 - T1 S1 — Orca worker (antigravity), worktree delivery-slicing, dispatch ctx_1c1484741ced — done, PR #9 merged (commit c2185f5 squashed)
 - T2 S2+S3 — Orca worker (antigravity), worktree node-contract, dispatch ctx_2bb01109bab7 — done, PR #8 merged; 4 example receipts validate against schemas/receipt.schema.json
 - T3 S4 — Orca worker (pi), worktree dotfiles-gate, dispatch ctx_c847ba841158 (retry; first start hit the Pi trust prompt, then the collapsed-paste issue) — done, PR #7 merged; tests/gates-test.sh 21/21 PASS and gates.sh GREEN against a real dotfiles checkout
-- T4 S5 — parent, after T1-T3 — pending
+- T4 S5 — parent — done: deck ~/Descargas/conocimiento/gentle-factory-diseno.{html,pdf} (local, 24 slides)
 
 ## Log
 
@@ -32,3 +32,4 @@ Decided constraints (all 2026-11-10, recorded in FullFran/gentle-factory#1):
 - L3 (2026-11-10): Run run_b912fc746597 started. A private prompt-intervention classification runs as a Claude subagent with output only under ~/Descargas/conocimiento/privado/, outside every repo, as the user authorized.
 - L4 (2026-11-10, verbatim): «deja qeu hagan push y pr y mergead todo en una rama integradora que es la que revisaré yo mañana». Branch integration/factory-v1-night created from main (d217515). Workers push and open PRs with that base; the parent spot-checks and merges them there. main is never touched.
 - L5 (2026-11-10): T1-T3 verified by the parent and squash-merged into integration/factory-v1-night. The private intervention classification finished (output outside every repo).
+- L6 (2026-11-10): Deck delivered locally. Open items found in review: the runner must reject agent edits under odd/runs/ (not yet in the drafts); predicateType uses the domain gentle-ai.net, whose ownership is unverified; default caps are uncalibrated; `--consent granted` is untested in a box.
