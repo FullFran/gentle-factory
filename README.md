@@ -126,11 +126,13 @@ reason=...` and exits 1. `FACTORY_GH_BIN` overrides `gh`.
 
 Behavior:
 
-- **Agent nodes** run `claude -p --output-format json` with the prompt on stdin, the
+- **Agent nodes** run `claude -p --output-format stream-json --verbose` with the prompt on stdin, the
   node's `tools` as `--allowedTools`, and `--disallowedTools` for `git push`, `git tag`,
   `git reset`, `gh` plus the node's `deny`. A `read_only` agent also loses `Edit`,
   `Write`, `NotebookEdit` and `git commit`. Cost, turns, tokens and model come from
-  the engine JSON; the agent's final text is the receipt's `notes`.
+  the stream's final `result` event; the agent's final text is the receipt's `notes`. The node
+  log keeps the whole stream, so a node stopped by `timeout_seconds` still shows what the agent
+  did, and its receipt notes name the number of turns and the last tool call (#30).
   `FACTORY_CLAUDE_BIN` overrides the binary. The prompt gets the issue and the design
   (from the context) and, for each node in the node's `inputs`, its full final answer
   (`## Output of <node>`, kept in `<run_dir>/outputs/`).
