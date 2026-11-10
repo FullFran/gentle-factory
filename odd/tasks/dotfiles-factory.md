@@ -14,14 +14,15 @@ Decided constraints carried over: v1 is Claude-only (factory-v1-night), so the r
 
 ## Tasks
 
-- T1 S4 — runner `collect` subcommand: gh issue + label + design comment → context.json, design.md, branch `factory/<issue>` — pending
-- T2 S1,S4 — runner: upstream handoff (`inputs` passes a node's notes to later prompts), `needs_decision` via a last line `DECISION:`, expected_files guard — pending
-- T3 S2 — rubric from merged bifrost PRs and history (`layers/bifrost/rubric.md`), route inline — pending
-- T4 S1 — `layers/bifrost/`: factory.json, plan/implement/review prompts, output node (push + `gh pr create --draft`) — pending
-- T5 S3 — end-to-end run on one real designed bifrost issue (agy `spawn bifrost ENOENT`) — blocked: needs Fran's approval of the design comment and `factory:ready`
+- T1 S4 — runner `collect` subcommand: gh issue + label + design comment → context.json, design.md, branch `factory/<issue>` — done, inline, d3e39f0
+- T2 S1,S4 — runner: upstream handoff (`inputs` passes a node's full output to later prompts), `needs_decision` via a last line `DECISION:`, expected_files guard — done, inline, d3e39f0
+- T3 S2 — rubric from merged bifrost PRs and history (in `layers/bifrost/review.md`, the reviewer's prompt), route inline — done, e74557b
+- T4 S1 — `layers/bifrost/`: factory.json, plan/implement/review prompts, output node (push + `gh pr create --draft`) — done, inline, e74557b
+- T5 S3 — end-to-end run on one real designed bifrost issue (agy `spawn bifrost ENOENT`) — blocked: FullFran/bifrost#4 opened; design draft waits for Fran's approval before it is posted with `factory:ready`
 
 ## Log
 
 - L1 (2026-11-10, verbatim): «si! y mergeala y seguimos adelante» … «Vamos con el siguiente paso…»
 - L2 (2026-11-10): No open dotfiles issue has a `factory-design:v1` comment or a `factory:ready` label (the label does not exist in FullFran/dotfiles yet), so T5 needs Fran's design first; T1-T4 can be built and tested with doubles meanwhile.
 - L3 (2026-11-10, verbatim): «si! hazlo y asi probamos la fabrica», answering whether to point the factory at bifrost for the agy fix. Evidence: dotfiles #8 and #62 are already implemented, #29 needs Fran's decisions, #21's empty output does not reproduce (exit 0 in 51 s), but every agy subagent run from gentle-shell fails with `spawn bifrost ENOENT` (gentle-agents task session, even with an absolute BIFROST_BIN), because the gentle-shell supervisor runs Pi with a sanitized env (`PATH=/runtime/node/bin:/usr/bin:/bin`) and bifrost's `pi/runtime.mjs:10` spawns the bare name `bifrost`. The fix lives in FullFran/bifrost, so S1-S3 apply to a bifrost issue and the layer is `layers/bifrost/`; the runner stays repo-agnostic. Routes: all inline (one understood change per task; no parallel units).
+- L4 (2026-11-10): T1-T4 GREEN. RED first: 26 new runner checks failed, then runner 71/71, layer 9/9, gates 28/28, schemas 23/23. Found while testing: a read_only node defaults to checker and re-runs after every commit, so the planner is `role: producer, read_only: true`. Agent notes are truncated to the last 2000 runes, so handoff reads the full answer from `<run_dir>/outputs/<node>.md`. Inside gentle-shell: PATH has no ~/.local/bin, HOME is redirected to gentle-shell's own home and BIFROST_BIN is dropped, so the bifrost fix must use os.userInfo().homedir. Design draft for bifrost#4 validates against the schema. Next: Fran approves the design, it is posted with label `factory:ready`, then collect + run on a fresh clone.
