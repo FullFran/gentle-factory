@@ -44,7 +44,7 @@
     },
     "predicateType": {
       "type": "string",
-      "const": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+      "const": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
       "description": "URI identifying the gentle-factory node receipt predicate schema."
     },
     "predicate": {
@@ -430,7 +430,7 @@
       },
       "allOf": [
         {
-          "description": "A success outcome cannot carry a failing exit code or a non-GREEN gate verdict.",
+          "description": "A success outcome cannot carry a failing exit code, a non-GREEN gate status or a verdict line reporting anything but status=GREEN.",
           "if": {
             "properties": {
               "outcome": {
@@ -455,6 +455,9 @@
                 "properties": {
                   "status": {
                     "const": "GREEN"
+                  },
+                  "verdict_line": {
+                    "pattern": "(^|\\s)status=GREEN(\\s|$)"
                   }
                 }
               }

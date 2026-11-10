@@ -42,14 +42,17 @@
         "not": {
           "anyOf": [
             {
-              "pattern": "(^|/)\\.\\.(/|$)"
+              "pattern": "(^|/)\\.\\.?(/|$)"
             },
             {
-              "pattern": "^(\\./)?(\\.factory|\\.git|odd/runs)(/|$)"
+              "pattern": "//"
+            },
+            {
+              "pattern": "^(\\.factory|\\.git|odd/runs|gates)(/|$)"
             }
           ]
         },
-        "description": "Repository-relative path or glob. Absolute paths, '..' segments and protected paths (.factory/, .git/, odd/runs/) are rejected."
+        "description": "Normalized repository-relative path or glob. Absolute paths, '.' or '..' segments, empty segments and protected paths (.factory/, .git/, odd/runs/, gates/) are rejected."
       },
       "minItems": 1,
       "description": "List of expected file paths or glob patterns permitted for mutation."

@@ -24,7 +24,7 @@ When building verifiable software supply chains, continuous delivery pipelines, 
 │  │ in-toto Statement v1.0 (Linux Foundation / CNCF)                 │  │
 │  │   _type: "https://in-toto.io/Statement/v1"                       │  │
 │  │   subject: [ { name: "git:commit", digest: { gitCommit: ... } } ] │  │
-│  │   predicateType: "https://fullfran.com/spec/gentle-factory/receipt/v0.1"        │  │
+│  │   predicateType: "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md"        │  │
 │  │  ┌────────────────────────────────────────────────────────────┐  │  │
 │  │  │ gentle-factory Predicate (JSON Schema 2020-12)             │  │  │
 │  │  │   - References (Issue, Design Comment SHA, Commits, PR)    │  │  │
@@ -63,7 +63,7 @@ To avoid synchronization drift, context explosion, and data leakage, receipts **
 |---|---|---|
 | `_type` | `string` | Must be `"https://in-toto.io/Statement/v1"`. |
 | `subject` | `array` | List of target artifacts produced or verified. Each item has `name` (e.g. `git:commit`) and a `digest` object (e.g. `{"gitCommit": "...", "sha256": "..."}`). |
-| `predicateType` | `string` | Must be `"https://fullfran.com/spec/gentle-factory/receipt/v0.1"`. |
+| `predicateType` | `string` | Must be `"https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md"`. |
 | `predicate` | `object` | The typed receipt payload defined below. |
 
 ### 2.3 Predicate Schema Breakdown
@@ -98,7 +98,7 @@ The receipt predicate is defined in [schemas/receipt.schema.json](../../schemas/
    - `exit_code`: Numeric process exit code if applicable. A `success` receipt may only carry `exit_code: 0`.
 7. **Gate Verdict (`gate`)**:
    - `status`: Enum: `"GREEN"`, `"RED"`, `"MISCONFIGURED"`. A `success` receipt may only carry `GREEN`.
-   - `verdict_line`: Exact terminal output string (e.g. `FACTORY_GATES: status=GREEN level=standard passed=12 failed=0`).
+   - `verdict_line`: Exact terminal output string (e.g. `FACTORY_GATES: status=GREEN level=standard passed=12 failed=0`). On a `success` receipt it must report `status=GREEN`.
    - `checks_passed`: Array of passing check names.
    - `checks_failed`: Array of failing check names.
 8. **Failure Signature (`failure_signature`)**:
@@ -126,7 +126,7 @@ An agent node executes Claude Code headless to produce a git commit from a desig
       }
     }
   ],
-  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+  "predicateType": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -227,7 +227,7 @@ A deterministic test script validates the working tree and produces a `GREEN` ve
       }
     }
   ],
-  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+  "predicateType": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -299,7 +299,7 @@ A human maintains the design on the issue and applies the `factory:ready` label.
       }
     }
   ],
-  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+  "predicateType": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -351,7 +351,7 @@ When a gate fails, the receipt captures the `RED` verdict and computes a `failur
       }
     }
   ],
-  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+  "predicateType": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -442,7 +442,7 @@ When receipts are transmitted across networks, event buses, or Orca orchestratio
         }
       }
     ],
-    "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
+    "predicateType": "https://github.com/FullFran/gentle-factory/blob/receipt-v0.1/docs/design/receipt-format.md",
     "predicate": {
       "version": "0.1.0",
       "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -462,6 +462,9 @@ When receipts are transmitted across networks, event buses, or Orca orchestratio
           "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
           "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
           "updated_at": "2026-11-10T01:15:30Z"
+        },
+        "vcs": {
+          "head_commit": "d4e1f7a29b8c3d0e1f2a3b4c5d6e7f8a9b0c1d2e"
         }
       },
       "execution": {

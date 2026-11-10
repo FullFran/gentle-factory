@@ -75,7 +75,7 @@ Defines the **allowed edit surfaces** for the factory.
 - Prevents scope creep and accidental edits to shared infrastructure;
 - The factory enforces that any modification outside these paths trips a policy guard;
 - Gate scripts and security configurations (e.g. `.factory/gates.conf`) are protected and must never be listed in expected files.
-- The schema rejects absolute paths, `..` segments and the protected paths `.factory/`, `.git/` and `odd/runs/`. A glob that happens to match a protected path still grants nothing: the runner's protected-path guard always wins.
+- Paths must be normalized and repository-relative. The schema rejects absolute paths, `.` and `..` segments, empty segments (`//`) and the protected paths `.factory/`, `.git/`, `odd/runs/` and `gates/`. A glob that happens to match a protected path still grants nothing: the runner's protected-path guard always wins.
 - `done_when` must be a non-empty command; an empty command would always "pass".
 
 ### 3.3 Decisions Already Taken
