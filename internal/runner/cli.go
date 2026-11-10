@@ -30,10 +30,11 @@ Usage:
       gentle-factory/runs/<run_id>) and delete the clone unless --keep. Stops before
       running when factory/N already exists on origin. Last line:
       START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=... run=ID archive=DIR
-  factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--once]
+  factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
       List open issues labelled factory:ready and start each one like "start" (up to
       --slots per pass, default 1; --interval default 60; also --work-root, --archive,
-      --spec). A design is started once: the sha256 of its comment is kept in
+      --spec). Back-pressure: nothing starts while --max-open-prs (default 3) factory
+      draft PRs of that repository await review. A design is started once: the sha256 of its comment is kept in
       <work-root>/watch-state.json and a changed design starts again. Locks keep two
       watchers, or two runs of one issue, apart. --once does a single pass.
   factory report --runs-dir DIR --run-id ID --context FILE

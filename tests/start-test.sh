@@ -56,7 +56,7 @@ case "$1 $2" in
   "api repos/"*)
     IFS=/ read -r _ owner name _ n _ <<<"$2"
     cat "$FAKE_GH_DIR/comments-$owner+$name-$n.json" ;;
-  "pr list") ;;
+  "pr list") case " $* " in *" --head "*) ;; *) cat "$FAKE_GH_DIR/prs-$key.json" 2>/dev/null || echo '[]' ;; esac ;;
   "issue comment") for a in "$@"; do [ "$prev2" = --body-file ] && cat "$a" >>"$FAKE_GH_DIR/report-bodies"; prev2="$a"; done ;;
   "issue edit"|"label create") ;;
   "pr create") echo "https://github.com/$repo/pull/99" ;;
@@ -164,6 +164,16 @@ mk_list FullFran/bifrost 7
 wwork="$scratch/wwork"; warch="$scratch/warch"
 watch() { out="$("$factory" watch --once --work-root "$wwork" --archive "$warch" --spec "$scratch/spec.json" "$@" 2>&1)"; code=$?; }
 : >"$FAKE_LOG"
+# Back-pressure (#16): no new run while too many factory draft PRs await review.
+jq -n '[range(3) | {headRefName: "factory/\(. + 1)", isDraft: true}] + [{headRefName: "feature/x", isDraft: true}, {headRefName: "factory/9", isDraft: false}]' \
+  >"$FAKE_GH_DIR/prs-FullFran+bifrost.json"
+watch --repo FullFran/bifrost
+check "watch: starts nothing while 3 factory draft PRs await review (default --max-open-prs 3)" \
+  '[ "$code" = 0 ] && [ "$(starts)" = 0 ] && grep -q "WATCH: issue=FullFran/bifrost#7 skip reason=backpressure open_factory_prs=3" <<<"$out"'
+check "watch: back-pressure leaves the design unrecorded, so it starts later" '[ ! -e "$wwork/watch-state.json" ] || ! grep -q "bifrost#7" "$wwork/watch-state.json"'
+watch --repo FullFran/bifrost --max-open-prs 4
+check "watch: --max-open-prs raises the limit" '[ "$code" = 0 ] && [ "$(starts)" = 1 ]'
+rm -rf "$wwork" "$warch" "$FAKE_GH_DIR/prs-FullFran+bifrost.json"; : >"$FAKE_LOG"
 watch --repo FullFran/bifrost
 check "watch --once: starts a ready labelled issue" '[ "$code" = 0 ] && [ "$(starts)" = 1 ] && grep -q "^START: status=COMPLETE issue=FullFran/bifrost#7" <<<"$out"'
 check "watch: lists open factory:ready issues with gh" 'grep -q "^issue list -R FullFran/bifrost .*factory:ready" "$FAKE_GH_DIR/calls"'

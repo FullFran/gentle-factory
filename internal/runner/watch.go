@@ -85,6 +85,7 @@ type watchOpts struct {
 	repos    []string
 	interval time.Duration
 	slots    int
+	maxOpen  int
 	once     bool
 	start    startOpts
 }
@@ -109,6 +110,11 @@ func watchPass(w watchOpts, statePath string, out io.Writer) error {
 			note(err)
 			continue
 		}
+		open, err := openFactoryPRs(repo)
+		if err != nil {
+			note(err)
+			continue
+		}
 		for _, n := range numbers {
 			key := fmt.Sprintf("%s#%d", repo, n)
 			sha, err := designSHA(repo, n)
@@ -122,6 +128,8 @@ func watchPass(w watchOpts, statePath string, out io.Writer) error {
 				skip("no_design")
 			case state[key] == sha:
 				skip("same_design")
+			case open >= w.maxOpen:
+				skip(fmt.Sprintf("backpressure open_factory_prs=%d", open))
 			case started >= w.slots:
 				skip("slots_full")
 			default:
@@ -155,12 +163,13 @@ func cmdWatch(args []string, stdout, stderr io.Writer) (int, error) {
 	fs.Var(&repos, "repo", "GitHub repository OWNER/NAME to watch (repeatable)")
 	fs.IntVar(&interval, "interval", 60, "seconds between passes")
 	fs.IntVar(&w.slots, "slots", 1, "issues started per pass")
+	fs.IntVar(&w.maxOpen, "max-open-prs", 3, "start nothing while this many factory draft PRs await review")
 	fs.BoolVar(&w.once, "once", false, "do one pass and exit")
 	if err := fs.Parse(args); err != nil {
 		return 0, err
 	}
-	if len(repos) == 0 || fs.NArg() > 0 || w.slots < 1 || interval < 1 {
-		return 0, specErr("watch needs at least one --repo, --slots >= 1 and --interval >= 1, and no positional arguments")
+	if len(repos) == 0 || fs.NArg() > 0 || w.slots < 1 || w.maxOpen < 1 || interval < 1 {
+		return 0, specErr("watch needs at least one --repo, --slots >= 1, --max-open-prs >= 1 and --interval >= 1, and no positional arguments")
 	}
 	for _, r := range repos {
 		if !strings.Contains(r, "/") || strings.ContainsAny(r, "# ") {
@@ -204,4 +213,27 @@ func cmdWatch(args []string, stdout, stderr io.Writer) (int, error) {
 		case <-time.After(w.interval):
 		}
 	}
+}
+
+// openFactoryPRs counts the repository's open draft PRs from factory/ branches: work that
+// waits for the owner's review. Back-pressure (#16) stops new runs at --max-open-prs.
+func openFactoryPRs(repo string) (int, error) {
+	raw, err := gh("pr", "list", "-R", repo, "--state", "open", "--json", "headRefName,isDraft", "--limit", "100")
+	if err != nil {
+		return 0, err
+	}
+	var prs []struct {
+		HeadRefName string `json:"headRefName"`
+		IsDraft     bool   `json:"isDraft"`
+	}
+	if err := json.Unmarshal(raw, &prs); err != nil {
+		return 0, specErr("cannot read pull requests JSON: %v", err)
+	}
+	n := 0
+	for _, pr := range prs {
+		if pr.IsDraft && strings.HasPrefix(pr.HeadRefName, "factory/") {
+			n++
+		}
+	}
+	return n, nil
 }

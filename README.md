@@ -229,7 +229,7 @@ bin/factory run --spec pipeline/factory.json --repo "$co" --context "$ctx/contex
 
 ```bash
 bin/factory start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]
-bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--once]
+bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
 ```
 
 1. Lock the issue (a second run of the same issue is refused) and `gh repo clone` the
@@ -253,7 +253,10 @@ Nothing of a run remains under the work root once it ends. The last line is
 
 `watch` lists open issues labelled `factory:ready`, in order, and starts each one like
 `start` while slots remain in the pass (`--slots`, default 1; runs are sequential;
-`--interval` defaults to 60 s; `--once` does one pass and exits). The sha256 of the
+`--interval` defaults to 60 s; `--once` does one pass and exits). Back-pressure (#16): while
+`--max-open-prs` (default 3) open draft PRs from `factory/` branches await review in a
+repository, none of its issues starts (`skip reason=backpressure`), and the design is not
+recorded, so it starts once a PR is merged or closed. The sha256 of the
 design comment started for each issue is kept in `<work-root>/watch-state.json`, so the
 same design never starts twice and an edited design starts again. A `watch.lock` keeps
 two watchers apart. Stop a running watcher with Ctrl-C; it exits between passes. The state file is the only
