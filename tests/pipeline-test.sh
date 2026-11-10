@@ -66,6 +66,12 @@ jq '.done_when = ""' "$FACTORY_CONTEXT_FILE" >"$scratch/ctx/empty.json"
 out="$(cd "$co" && FACTORY_CONTEXT_FILE="$scratch/ctx/empty.json" bash "$layer/check.sh" 2>&1)"; code=$?
 check "check: a context without done_when is misconfigured, not a pass" '[ "$code" = 2 ] && grep -q "FACTORY_GATES: status=MISCONFIGURED" <<<"$out"'
 
+# Read-only nodes can run the repository's checks: Bash is allowed, the read-only guard keeps the tree unchanged.
+for n in plan review; do
+  check "pipeline: $n is read-only and may run any command (Bash)" \
+    "jq -e '.nodes[] | select(.id == \"$n\") | .read_only == true and (.tools | index(\"Bash\") != null)' \"\$layer/factory.json\" >/dev/null"
+done
+
 # The pipeline is repository-agnostic: no file in it names a repository or its commands.
 check "pipeline: names no repository or repository-specific command" \
   '! grep -rniE "bifrost|dotfiles|FullFran|node --test|go test|pi/" "$layer"'

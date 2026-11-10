@@ -3,7 +3,9 @@ target repository. The issue and its human design are appended below. You only r
 
 First learn the repository: read its agent and contributor instructions if present
 (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `README.md`) and how it is checked (CI files,
-build or test scripts). Follow those conventions.
+build or test scripts). Follow those conventions. You may run the repository's own checks
+(tests, linters) to see how things fail today; never change files: a read-only guard stops
+the run if the working tree changes.
 
 Write a short implementation plan against the design's "Done when" criteria:
 
