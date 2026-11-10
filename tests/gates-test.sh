@@ -81,6 +81,16 @@ t_unchanged_syntax() {
   new_repo; printf 'if then\n' > "$repo/old.sh"; commit; base=$(git -C "$repo" rev-parse HEAD)
   printf 'changed\n' > "$repo/value"; commit; gate; verdict 'FACTORY_GATES: status=GREEN' 0
 }
+t_shebang_token() { new_repo; printf '#!/usr/bin/env wish\nif then\n' > "$repo/tcl-tool"; commit; gate; verdict 'FACTORY_GATES: status=GREEN' 0; }
+t_sh_shebang() { new_repo; printf '#!/bin/sh\nif then\n' > "$repo/extensionless"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
+t_env_split_shebang() { new_repo; printf '#!/usr/bin/env -S bash -e\nif then\n' > "$repo/split-tool"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
+t_env_assignment_shebang() { new_repo; printf '#!/usr/bin/env LC_ALL=C bash\nif then\n' > "$repo/assign-tool"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
+t_ls_files_failure() {
+  new_repo
+  printf '#!/bin/bash\n[[ $1 == ls-files ]] && exit 128\nexec %q "$@"\n' "$(command -v git)" > "$repo/bin/git"; chmod +x "$repo/bin/git"
+  gate; verdict 'FACTORY_GATES: status=MISCONFIGURED' 2
+  grep -Eq '^GATE: name=blob-size status=MISCONFIGURED ' "$SCRATCH/out"
+}
 t_blob() { new_repo; head -c 1048577 /dev/zero > "$repo/blob"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
 t_blob_boundary() { new_repo; head -c 1048576 /dev/zero > "$repo/blob"; commit; gate; verdict 'FACTORY_GATES: status=GREEN' 0; }
 t_all_tests() {
@@ -99,6 +109,11 @@ t_dirty() {
 t_untracked() { proof_fixture; printf 'untouched\n' > "$repo/untracked"; proof; proof_verdict MISCONFIGURED 2; [[ $(< "$repo/untracked") == untouched ]]; }
 t_missing_command() { proof_fixture; invoke "$ROOT/gates/prove-test.sh" "$base" -- factory-command-does-not-exist; proof_verdict MISCONFIGURED 2; restored; }
 t_command_error() { proof_fixture; printf 'printf modified > value\nexit 127\n' > "$repo/scripts/tests/proof-test.sh"; commit; proof; proof_verdict MISCONFIGURED 2; restored; }
+t_usage_error() { proof_fixture; printf 'exit 4\n' > "$repo/scripts/tests/proof-test.sh"; commit; proof; proof_verdict MISCONFIGURED 2; grep -q 'reason=test-errored$' "$SCRATCH/out"; restored; }
+t_fail_code() {
+  proof_fixture; printf '[[ $(< value) == fixed ]] || exit 4\n' > "$repo/scripts/tests/proof-test.sh"; commit
+  invoke "$ROOT/gates/prove-test.sh" "$base" --fail-code 4 -- bash scripts/tests/proof-test.sh; proof_verdict PROVEN 0; restored
+}
 t_interrupt() { proof_fixture; printf 'kill -TERM "$PPID"\n' > "$repo/scripts/tests/proof-test.sh"; commit; proof; proof_verdict MISCONFIGURED 2; restored; }
 t_added_deleted() {
   proof_fixture; rm "$repo/value"; printf 'new\n' > "$repo/added"
@@ -107,7 +122,7 @@ t_added_deleted() {
   [[ ! -e "$repo/value" && $(< "$repo/added") == new && -z $(git -C "$repo" status --porcelain) ]]
 }
 serial=0
-for test in green red missing_directory missing_tool skipped syntax zsh_selection unchanged_syntax blob blob_boundary all_tests empty_suite invalid_ref proven not_proven dirty untracked missing_command command_error interrupt added_deleted; do
+for test in green red missing_directory missing_tool skipped syntax zsh_selection shebang_token sh_shebang env_split_shebang env_assignment_shebang ls_files_failure unchanged_syntax blob blob_boundary all_tests empty_suite invalid_ref proven not_proven dirty untracked missing_command command_error usage_error fail_code interrupt added_deleted; do
   # A separate process preserves errexit inside test functions and isolates fixtures.
   set +e
   (set -e; "t_$test")

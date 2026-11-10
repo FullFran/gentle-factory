@@ -32,6 +32,7 @@ Run from this checkout (the target may be a separate repository):
 ```bash
 bash gates/gates.sh /path/to/dotfiles <base-ref>
 bash tests/gates-test.sh
+bash tests/schemas-test.sh   # needs jq, python3 and check-jsonschema (or uvx); exits 77 if missing
 ```
 
 The gate requires Bash, Git, GNU `date`/`stat`, `head`, `tr`, zsh, tmux and jq.
@@ -44,12 +45,12 @@ FACTORY_GATES: status=GREEN
 
 | Gate | Scope |
 |---|---|
-| `shell-syntax` | Changed tracked files relative to the base (including staged/unstaged edits), selected by shell extension or shebang; `bash -n` or `zsh -n`. Deleted files and symlinks are skipped. |
+| `shell-syntax` | Changed tracked files relative to the base (including staged/unstaged edits), selected by shell extension or by a shebang whose interpreter is `sh`, `bash`, `dash`, `ksh` or `zsh` (directly or through `env`); `bash -n` or `zsh -n`. Deleted files and symlinks are skipped. |
 | `blob-size` | Every tracked regular file in the working tree; files larger than 1 MiB fail (exactly 1 MiB is allowed). |
 | `scripts-tests` | Every `scripts/tests/*-test.sh`, run with Bash from the target root, without stopping at the first failure. |
 
 Exit codes are `0` (GREEN), `1` (RED), and `2` (MISCONFIGURED).
-Missing tools, an invalid base, an absent/empty test directory, or an unavailable
+Missing tools, an invalid base, a git listing that fails, an absent/empty test directory, or an unavailable
 test (exit 77, 126 or 127) are MISCONFIGURED. MISCONFIGURED takes precedence over
 RED, so incomplete coverage cannot be mistaken for a passing run.
 Tests and their output are not a security boundary; run trusted code in a disposable workbox.
@@ -63,6 +64,8 @@ no untracked files), then run from the target repository:
 bash /path/to/gentle-factory/gates/prove-test.sh <base-ref> -- bash scripts/tests/example-test.sh
 # Override test-path detection when needed (repeat --test-path for multiple paths):
 bash /path/to/gentle-factory/gates/prove-test.sh <base-ref> --test-path checks -- bash checks/regression.sh
+# Declare which exit codes mean "test failed" when the runner does not use 1:
+bash /path/to/gentle-factory/gates/prove-test.sh <base-ref> --fail-code 101 -- cargo test
 ```
 
 The proof creates a detached worktree under `/tmp`, keeps HEAD's tests, restores
@@ -74,9 +77,13 @@ An explicit `--test-path` replaces those defaults. This is a base-to-HEAD
 comparison, not a merge-base comparison.
 
 The final line is `PROOF: status=PROVEN|NOT_PROVEN|MISCONFIGURED reason=...`
-(with one concrete status and reason). A nonzero test exit proves the
-counterfactual; a passing test is NOT_PROVEN. Missing commands, skipped tests,
-signals, dirty trees and absent non-test changes are MISCONFIGURED. Exit codes
+(with one concrete status and reason). Only a declared failure code proves the
+counterfactual: `1` by default, or the codes given with `--fail-code <n>` (repeatable,
+for example `--fail-code 101` for `cargo test`). Any other nonzero exit, such as a
+pytest usage error (4) or "no tests collected" (5), is MISCONFIGURED with
+`reason=test-errored`, because no regression test actually ran. Known limit: an exit code cannot tell a failing assertion from a crash that uses the same code (for example a Python import error also exits 1), so read the test output of a PROVEN result; parsing a runner's report (JUnit XML) is the stronger check. A passing test is
+NOT_PROVEN. Missing commands, skipped tests, signals, dirty trees and absent
+non-test changes are MISCONFIGURED. Exit codes
 are respectively `0`, `1`, and `2`. Run the full gate separately to establish
 that the fixed version passes: proof alone does not establish correctness.
 The caller's tree and index are never edited. The temporary worktree is removed

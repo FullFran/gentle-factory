@@ -149,10 +149,12 @@ To prevent prompt injection, test tampering, or unreviewed publication, nodes ru
 
 | Node Role | Tool Grant | Restrictions & Denials |
 |---|---|---|
-| **Implementer** | `read`, `edit`, `write`, `bash` (restricted) | Cannot push to remote; cannot modify `.factory/` or gate scripts (`protected_files`). |
+| **Implementer** | `read`, `edit`, `write`, `bash` (restricted) | Cannot push to remote; cannot modify `.factory/`, gate scripts or the receipt store `odd/runs/` (`protected_files`). |
 | **Reviewer** | `read`, `bash` (test readback only) | Hard denial on `edit`, `write`, `git commit`, `git push`. Credential-less worktree. |
 | **Code Gate** | Deterministic runner | Executes only pre-declared test harnesses (`tests/*.sh`). No generative model access. |
 | **Human Gate** | None | Pure runner checking API state. |
+
+**Receipts are written by the runner only.** No agent node writes a receipt. After every agent node the runner diffs the node's changes and fails the node (`terminal_reason=protected_path_modified`) if any path under `odd/runs/`, `.factory/` or the gate scripts changed, before it writes that node's receipt. Protected paths win over a design comment's `expected_files`: listing them there does not grant access. This blocks forged or edited receipts from inside the worktree; signing receipts (in-toto DSSE) with a key agents cannot read is the later, stronger step.
 
 ### 4.3 Caps and Safety Guards
 
@@ -182,8 +184,8 @@ Receipt Store (Receipt 1, Receipt 2, ...) ───► Runner Decide Function �
 **Next Node Selection Algorithm**:
 1. Load the factory pipeline definition (ordered sequence of nodes: e.g., `[design_gate, implement, verify, review, pr_draft]`).
 2. Read all receipts associated with the active `run_id`.
-3. Filter for receipts with `outcome.status == "success"`.
-4. Identify the first node in the sequence that does not possess a successful completion receipt.
+3. Filter for receipts with `outcome.status == "success"` that are still current: for nodes that check code (`verify`, `review`, `pr_draft`), `references.vcs.head_commit` must equal the current head of the run branch (see §5.2). A checking receipt for an older commit is stale and does not count. Nodes that produce code (`implement`, `repair`) record the head they created and stay current after a later repair.
+4. Identify the first node in the sequence that does not possess a current successful completion receipt.
 5. If the previous node yielded `failure`:
    - If the node is `verify` and retry budget remains: schedule the `repair` node.
    - If the node is `repair` or retries are exhausted: transition to `needs_decision` (halt).
@@ -193,7 +195,8 @@ Receipt Store (Receipt 1, Receipt 2, ...) ───► Runner Decide Function �
 
 - **Crash Invariance**: If a host machine restarts, a worker pod is evicted, or a runner crashes mid-step, **no completion receipt exists** for the active node.
 - **Clean Resume**: When the runner resumes, it inspects the receipts. All completed nodes are skipped. The incomplete node is re-executed from scratch against the clean workspace baseline.
-- **Never Run Twice**: A node with an existing `success` receipt for that run is never re-executed.
+- **Never Run Twice**: A node with a current `success` receipt for that run is never re-executed.
+- **Code changes invalidate downstream receipts**: a receipt is bound to the commit it observed (`references.vcs.head_commit`). When a later node moves the run branch head (for example a `repair` after `review`), every success receipt of a code-checking node for an older commit becomes stale, so `verify` and later checks run again against the new code. Producer receipts (`implement`, `repair`) are not invalidated: re-running them would discard the work under review. Receipts are never deleted; staleness is computed, so the history stays complete.
 
 ### 5.3 Bounded Repair Loop
 
@@ -208,7 +211,7 @@ flowchart LR
 
 1. **Attempt Bounds**: A failing verification gate permits at most **2 to 3 repair rounds** (configurable, default: 2).
 2. **Identical-Failure Signature**:
-   Every failure receipt computes a `failure_signature`: a deterministic hash of normalized error logs or failed check names.
+   Every failure receipt must carry a `failure_signature` (enforced by the receipt schema): a deterministic hash of normalized error logs or failed check names.
    - If `attempt[N].failure_signature == attempt[N-1].failure_signature`: the repair agent failed to alter the defect. The runner halts immediately without burning further turns.
 
 ### 5.4 Global Back-Pressure

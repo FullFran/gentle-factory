@@ -34,39 +34,63 @@ run_gate() {
   printf 'GATE: name=%s status=%s duration_ms=%s\n' "$name" "$result" "$((end - start))"
 }
 shell_syntax() {
-  local path shebang checker result=0
-  while IFS= read -r -d '' path; do
+  local path shebang checker interpreter word result=0
+  local -a paths words
+  # Read the list first and check git's exit code: a failed listing must not look like an empty one.
+  mapfile -d '' -t paths < <(git diff --name-only --diff-filter=ACMRT -z "$base" --)
+  wait "$!" || { printf 'ERROR: diff-unavailable\n' >&2; return 2; }
+  for path in "${paths[@]}"; do
     [[ -f $path && ! -L $path ]] || continue
     shebang=$(head -c 128 -- "$path" | tr -d '\0')
     shebang=${shebang%%$'\n'*}
-    case "$path::$shebang" in
-      *.sh::*|*.bash::*|*.zsh::*|*::'#!'*sh*) ;;
-      *) continue ;;
-    esac
-    case "$shebang" in
-      *zsh*) checker=zsh ;;
-      *bash*) checker=bash ;;
-      *) case $path in *.zsh) checker=zsh ;; *) checker=bash ;; esac ;;
-    esac
+    checker=
+    # Match the interpreter as a whole word: "#!/usr/bin/env wish" is not a shell.
+    if [[ $shebang == '#!'* ]]; then
+      read -ra words <<< "${shebang#'#!'}"
+      interpreter=${words[0]:-}
+      interpreter=${interpreter##*/}
+      if [[ $interpreter == env ]]; then
+        # Skip env's options (-S, -i, ...) and VAR=value assignments to reach the command.
+        interpreter=
+        for word in "${words[@]:1}"; do
+          [[ $word == -* || $word == *=* ]] && continue
+          interpreter=${word##*/}; break
+        done
+      fi
+      case $interpreter in
+        zsh) checker=zsh ;;
+        sh|bash|dash|ksh) checker=bash ;;
+      esac
+    fi
+    if [[ -z $checker ]]; then
+      case $path in
+        *.zsh) checker=zsh ;;
+        *.sh|*.bash) checker=bash ;;
+        *) continue ;;
+      esac
+    fi
     if ! command -v "$checker" >/dev/null 2>&1; then
       printf 'ERROR: missing-tool:%s\n' "$checker" >&2; result=2
     elif ! "$checker" -n -- "$path"; then
       printf 'ERROR: syntax:%s checker=%s\n' "$path" "$checker" >&2
       [[ $result == 2 ]] || result=1
     fi
-  done < <(git diff --name-only --diff-filter=ACMRT -z "$base" --)
+  done
   return "$result"
 }
 blob_size() {
   local path size result=0
-  while IFS= read -r -d '' path; do
+  local -a paths
+  mapfile -d '' -t paths < <(git ls-files -z)
+  wait "$!" || { printf 'ERROR: ls-files-unavailable\n' >&2; return 2; }
+  for path in "${paths[@]}"; do
     [[ -f $path && ! -L $path ]] || continue
     size=$(stat -c %s -- "$path") || return 2
     if (( size > 1048576 )); then
       printf 'ERROR: blob-too-large:%s bytes=%s\n' "$path" "$size" >&2
       result=1
     fi
-  done < <(git ls-files -z)
+  done
   return "$result"
 }
 script_tests() {

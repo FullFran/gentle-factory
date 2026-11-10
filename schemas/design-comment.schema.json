@@ -29,12 +29,30 @@
     },
     "done_when": {
       "type": "string",
-      "description": "Machine-checkable shell command, test path, or assertion proving completion."
+      "description": "Machine-checkable shell command, test path, or assertion proving completion.",
+      "minLength": 1,
+      "pattern": "\\S"
     },
     "expected_files": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^/\\s]",
+        "not": {
+          "anyOf": [
+            {
+              "pattern": "(^|/)\\.\\.?(/|$)"
+            },
+            {
+              "pattern": "//"
+            },
+            {
+              "pattern": "^(\\.factory|\\.git|odd/runs|gates)(/|$)"
+            }
+          ]
+        },
+        "description": "Normalized repository-relative path or glob. Absolute paths, '.' or '..' segments, empty segments and protected paths (.factory/, .git/, odd/runs/, gates/) are rejected."
       },
       "minItems": 1,
       "description": "List of expected file paths or glob patterns permitted for mutation."
