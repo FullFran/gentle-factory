@@ -389,7 +389,7 @@ export FACTORY_GH_BIN="$scratch/bin/gh"
 design_body() { # design_body JSON -> a design comment body around that block
   printf '<!-- factory-design:v1\n%s\n-->\n\n# Resolve the bifrost binary\n\nDone when the test passes.\n' "$1"
 }
-good='{"schema_version": "1.0", "issue": 7, "ready_signal": "factory:ready", "done_when": "node --test pi/bifrost.test.mjs", "expected_files": ["pi/runtime.mjs", "pi/bifrost.test.mjs"]}'
+good='{"schema_version": "1.0", "issue": 7, "ready_signal": "factory:ready", "done_when": "test -f fixed.txt", "expected_files": ["pi/runtime.mjs", "pi/bifrost.test.mjs"]}'
 setup_gh() { # setup_gh LABEL DESIGN_JSON -> fresh $FAKE_GH_DIR
   export FAKE_GH_DIR; FAKE_GH_DIR="$(mktemp -d "$scratch/gh.XXXX")"
   jq -n --arg l "$1" '{number:7,url:"https://github.com/FullFran/bifrost/issues/7",title:"agy: spawn bifrost ENOENT",
@@ -416,7 +416,7 @@ check "collect: ready issue with a valid design exits 0" '[ "$code" = 0 ] && gre
 check "collect: pins the latest design comment by id, url, sha256 and updated_at" \
   '[ "$(jq -c .design_comment "$ctx")" = "$(jq -nc --arg s "$(jq -r ".[1][0].body" "$FAKE_GH_DIR/comments.json" | tr -d "\n" | head -c0; jq -j ".[1][0].body" "$FAKE_GH_DIR/comments.json" | sha256sum | cut -d" " -f1)" "{id:3,url:\"https://github.com/FullFran/bifrost/issues/7#issuecomment-3\",sha256:\$s,updated_at:\"2026-11-10T02:00:00Z\"}")" ]'
 check "collect: context carries repository, issue, done_when and expected_files" \
-  '[ "$(jq -c "[.repository,.issue.number,.issue.url,.done_when,.expected_files]" "$ctx")" = "[\"FullFran/bifrost\",7,\"https://github.com/FullFran/bifrost/issues/7\",\"node --test pi/bifrost.test.mjs\",[\"pi/runtime.mjs\",\"pi/bifrost.test.mjs\"]]" ]'
+  '[ "$(jq -c "[.repository,.issue.number,.issue.url,.done_when,.expected_files]" "$ctx")" = "[\"FullFran/bifrost\",7,\"https://github.com/FullFran/bifrost/issues/7\",\"test -f fixed.txt\",[\"pi/runtime.mjs\",\"pi/bifrost.test.mjs\"]]" ]'
 check "collect: writes the design and issue texts next to the context" \
   'grep -q "Resolve the bifrost binary" "$scratch/collect-ok-out/design.md" && grep -q "Every agy run fails." "$scratch/collect-ok-out/issue.md" && grep -q "agy: spawn bifrost ENOENT" "$scratch/collect-ok-out/issue.md"'
 check "collect: checks out factory/7 from origin's default branch" \
@@ -437,12 +437,32 @@ not_ready() { # not_ready NAME DESIGN_JSON EXPECTED_REASON
   check "collect: $1 is not ready" '[ "$code" = 1 ] && grep -qF "$want" <<<"$out" && grep -q "COLLECT: status=NOT_READY" <<<"$out"'
 }
 not_ready unknown-key "${good/\"issue\": 7/\"issue\": 7, \"extra\": 1}" 'unknown field "extra"'
-not_ready no-done-when "${good/\"done_when\": \"node --test pi\/bifrost.test.mjs\", /}" 'done_when'
+not_ready no-done-when "${good/\"done_when\": \"test -f fixed.txt\", /}" 'done_when'
 not_ready wrong-issue "${good/\"issue\": 7/\"issue\": 8}" 'design is for issue 8'
 not_ready absolute-path "${good/pi\/runtime.mjs/\/etc\/passwd}" 'expected_files entry "/etc/passwd"'
 not_ready dotdot-path "${good/pi\/runtime.mjs/pi\/..\/..\/x}" 'expected_files entry "pi/../../x"'
 not_ready protected-path "${good/pi\/runtime.mjs/gates\/gate.sh}" 'expected_files entry "gates/gate.sh"'
 not_ready bad-json '{"schema_version": ' 'design block is not valid JSON'
+
+# The design's done_when must fail before any change, or it proves nothing.
+setup_gh factory:ready "${good/test -f fixed.txt/true}"
+co="$(new_checkout collect-green)"
+collect "$co" "$scratch/out-green"
+check "collect: a done_when that already passes at base is not ready" \
+  '[ "$code" = 1 ] && grep -q "COLLECT: status=NOT_READY reason=done_when already passes before any change" <<<"$out"'
+check "collect: a rejected design leaves no branch and no context" \
+  '! git -C "$co" rev-parse --verify --quiet refs/heads/factory/7 >/dev/null && [ ! -e "$scratch/out-green/context.json" ] && [ "$(git -C "$co" rev-parse --abbrev-ref HEAD)" = main ]'
+setup_gh factory:ready "${good/test -f fixed.txt/no-such-command-xyz}"
+collect "$(new_checkout collect-127)" "$scratch/out-127"
+check "collect: a done_when that cannot run is not ready" \
+  '[ "$code" = 1 ] && grep -q "COLLECT: status=NOT_READY reason=done_when cannot run (exit 127)" <<<"$out"'
+setup_gh factory:ready "${good/test -f fixed.txt/touch junk.txt; test -f fixed.txt}"
+co="$(new_checkout collect-junk)"
+collect "$co" "$scratch/out-junk"
+check "collect: the check leaves the checkout clean" \
+  '[ "$code" = 0 ] && [ -z "$(git -C "$co" status --porcelain)" ] && grep -q "COLLECT: status=READY" <<<"$out"'
+check "collect: a ready design reports the failing done_when it checked" \
+  'grep -q "COLLECT: check=done_when status=RED exit=1" <<<"$out"'
 
 # --- misconfiguration and portability ----------------------------------------
 

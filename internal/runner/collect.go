@@ -167,6 +167,22 @@ func collect(a collectArgs, stdout io.Writer) error {
 		return err
 	}
 
+	if _, err := git(checkout, "fetch", "-q", "origin"); err != nil {
+		return err
+	}
+	base := "origin/main"
+	if ref, err := git(checkout, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		base = strings.TrimSpace(ref)
+	}
+	if _, err := git(checkout, "switch", "-q", "-c", branch, "--no-track", base); err != nil {
+		return err
+	}
+	if err := checkDoneWhenFails(checkout, design.DoneWhen, stdout); err != nil {
+		if _, swErr := git(checkout, "switch", "-q", "-"); swErr == nil {
+			_, _ = git(checkout, "branch", "-q", "-D", branch)
+		}
+		return err
+	}
 	if err := os.MkdirAll(a.out, 0o755); err != nil {
 		return err
 	}
@@ -187,16 +203,6 @@ func collect(a collectArgs, stdout io.Writer) error {
 		return err
 	}
 
-	if _, err := git(checkout, "fetch", "-q", "origin"); err != nil {
-		return err
-	}
-	base := "origin/main"
-	if ref, err := git(checkout, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
-		base = strings.TrimSpace(ref)
-	}
-	if _, err := git(checkout, "switch", "-q", "-c", branch, "--no-track", base); err != nil {
-		return err
-	}
 	fmt.Fprintf(stdout, "COLLECT: status=READY issue=%s#%d design_comment=%d branch=%s base=%s context=%s\n",
 		a.repo, a.issue, comment.ID, branch, base, contextPath)
 	return nil
@@ -225,4 +231,29 @@ func cmdCollect(args []string, stdout, stderr io.Writer) (int, error) {
 		return 0, err
 	}
 	return exitOK, nil
+}
+
+// doneWhenTimeout bounds the pre-run check of the design's done_when.
+const doneWhenTimeout = 600
+
+// checkDoneWhenFails runs the design's done_when at the base: it must fail, or it proves
+// nothing about the change. The checkout is restored afterwards.
+func checkDoneWhenFails(checkout, doneWhen string, stdout io.Writer) error {
+	code, _, _, timedOut := runProcess([]string{"bash", "-c", doneWhen}, checkout, os.Environ(), "", doneWhenTimeout)
+	if _, err := git(checkout, "checkout", "-q", "--", "."); err != nil {
+		return err
+	}
+	if _, err := git(checkout, "clean", "-q", "-f", "-d"); err != nil {
+		return err
+	}
+	switch {
+	case timedOut:
+		return notReadyf("done_when timed out after %ds before any change", doneWhenTimeout)
+	case code == 0:
+		return notReadyf("done_when already passes before any change, so it cannot prove the issue done")
+	case code == 126 || code == 127:
+		return notReadyf("done_when cannot run (exit %d)", code)
+	}
+	fmt.Fprintf(stdout, "COLLECT: check=done_when status=RED exit=%d\n", code)
+	return nil
 }

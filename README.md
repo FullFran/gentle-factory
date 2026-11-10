@@ -140,7 +140,9 @@ and an optional `task_id` (default `<repository>#<issue>`). `collect` also write
 block valid against [the design schema](schemas/design-comment.schema.json), pins that
 comment's id, url, sha256 and `updated_at`, writes `context.json`, `design.md` and
 `issue.md` to `--out`, and creates branch `factory/<issue>` from origin's default branch
-in a clean `--checkout`. An issue that is not ready prints `COLLECT: status=NOT_READY
+in a clean `--checkout`. Before writing anything it runs the design's `done_when` on that
+branch: it must fail (a `done_when` that already passes, cannot run or times out proves
+nothing), and the checkout is restored afterwards. An issue that is not ready prints `COLLECT: status=NOT_READY
 reason=...` and exits 1. `FACTORY_GH_BIN` overrides `gh`.
 
 Behavior:
