@@ -349,6 +349,9 @@ rid="$(receipt "$repo" 1 | jq -r .run_id)"
 FAKE_MODE=edit drun "$repo" "$scratch/handoff.json" --run-id "$rid"
 check "decision: resuming does not re-run the node until the design changes" \
   '[ "$code" = 1 ] && grep -q "reason=user_decision_required" <<<"$out" && [ "$(count_receipts "$repo")" = 1 ]'
+decision_json="$("$factory" summary --repo "$repo" --json)"
+check "summary: decisions are counted apart from failures" \
+  'jq -e ".nodes.plan.decisions == 1 and .nodes.plan.failures == 0" <<<"$decision_json" >/dev/null'
 
 repo="$(new_repo outside)"
 FAKE_MODE_plan=plan FAKE_MODE_implement=outside drun "$repo" "$scratch/handoff.json"
