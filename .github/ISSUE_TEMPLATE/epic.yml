@@ -1,0 +1,24 @@
+name: Epic / tracker
+description: A goal split into sub-issues; progress shows in the project's Epics view.
+title: "epic(<area>): <goal>"
+labels: ["tracking"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The outcome, with the requester's words quoted verbatim and dated.
+    validations:
+      required: true
+  - type: textarea
+    id: done_when
+    attributes:
+      label: Done when
+      description: The observable condition that closes the epic.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Add children as **sub-issues** (Create sub-issue / Add existing issue on this issue),
+        and hard dependencies as **Blocked by** links, not as text lists.
