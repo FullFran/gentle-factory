@@ -14,6 +14,11 @@ import (
 const usage = `factory: gentle-factory node runner
 
 Usage:
+  factory collect --repo OWNER/NAME --issue N --checkout DIR --out DIR
+      Check that the issue is ready (label factory:ready and a valid
+      factory-design:v1 comment), write context.json, design.md and issue.md
+      to DIR, and create branch factory/N from origin's default branch.
+      Exit 1 when the issue is not ready.
   factory run --spec SPEC --repo REPO --context CONTEXT [--run-id ID] [--runs-dir DIR]
       Run (or resume, with --run-id) a factory against a target git repository.
   factory summary [--repo REPO] [--runs-dir DIR] [--json]
@@ -37,10 +42,12 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "run":
 		code, err = cmdRun(args[1:], stdout, stderr)
+	case "collect":
+		code, err = cmdCollect(args[1:], stdout, stderr)
 	case "summary":
 		code, err = cmdSummary(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want run or summary)", args[0])
+		err = specErr("unknown command %q (want collect, run or summary)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {

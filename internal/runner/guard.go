@@ -183,3 +183,26 @@ func commitProducerChanges(rc *runCtx, node *Node, attempt int) error {
 		"commit", "-q", "--no-verify", "-m", fmt.Sprintf("chore(factory): %s attempt %d (%s)", node.ID, attempt, rc.runID))
 	return err
 }
+
+// unexpectedPaths lists the paths changed since base (commits, edits and new
+// files) that no expected_files entry covers.
+func unexpectedPaths(repo, base string, expected []string) ([]string, error) {
+	changed, err := git(repo, "diff", "--name-only", "--no-renames", base)
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := git(repo, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, p := range strings.Split(changed+"\n"+untracked, "\n") {
+		if p != "" && !seen[p] && !matchExpected(expected, p) {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}

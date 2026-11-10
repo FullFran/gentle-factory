@@ -43,8 +43,12 @@ prompt="$(cat)"
   printf 'PROMPT: %s\n' "$(printf '%s' "$prompt" | tr '\n' ' ')"
 } >>"$log"
 result="hecho"
-case "${FAKE_MODE:-edit}" in
+mode_var="FAKE_MODE_${FACTORY_NODE_ID}"
+case "${!mode_var:-${FAKE_MODE:-edit}}" in
   edit) echo "attempt $FACTORY_ATTEMPT" >impl.txt ;;
+  plan) result=$'PLAN: write impl.txt\nthen stop' ;;
+  decision) result=$'no sé qué hacer\nDECISION: should the symlink be followed or copied?' ;;
+  outside) echo "attempt $FACTORY_ATTEMPT" >impl.txt; echo x >other.txt ;;
   noop) : ;;
   fallo) result=$'lo he intentado\nFALLO: el diseño no dice qué hacer con los symlinks' ;;
   protected) echo "tampered" >>gates/gate.sh ;;
@@ -287,6 +291,142 @@ check "summary: counts runs, failures and retries" \
 summary_text="$("$factory" summary --repo "$repo")"
 check "summary: names the step that fails, retries and costs the most" \
   'grep -qx "MOST: failures=verify retries=implement cost=implement" <<<"$summary_text"'
+
+# --- upstream handoff, design, decisions and expected files (factory#3) -------
+
+mkdir -p "$scratch/designed"
+echo "Count the JSON files. DESIGN-MARKER" >"$scratch/designed/design.md"
+echo "agy fails with ENOENT. ISSUE-MARKER" >"$scratch/designed/issue.md"
+cat >"$scratch/designed/context.json" <<'EOF'
+{"repository": "FullFran/bifrost",
+ "issue": {"number": 7, "url": "https://github.com/FullFran/bifrost/issues/7"},
+ "design_comment": {"id": 9, "url": "https://github.com/FullFran/bifrost/issues/7#issuecomment-9",
+   "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
+   "updated_at": "2026-11-10T01:15:30Z"},
+ "done_when": "test -f impl.txt", "expected_files": ["impl.*", "docs/**"],
+ "design_file": "design.md", "issue_file": "issue.md"}
+EOF
+echo "Plan the change." >"$scratch/plan.md"
+cat >"$scratch/handoff.json" <<EOF
+{"factory": "test", "max_retries": 2,
+ "nodes": [
+  {"id": "plan", "kind": "agent", "prompt_file": "plan.md", "role": "producer", "read_only": true},
+  {"id": "implement", "kind": "agent", "prompt_file": "implement.md", "inputs": ["plan"]},
+  {"id": "verify", "kind": "code", "read_only": true, "retry": "implement",
+   "command": ["bash", "-c", "jq -r .done_when \"\$FACTORY_CONTEXT_FILE\" | bash && echo DONE-OK"]}
+ ]}
+EOF
+drun() { # drun REPO SPEC [extra args]: run with the designed context
+  out="$("$factory" run --spec "$2" --repo "$1" --context "$scratch/designed/context.json" "${@:3}" 2>&1)"
+  code=$?
+}
+repo="$(new_repo handoff)"
+: >"$FAKE_LOG"
+FAKE_MODE_plan=plan drun "$repo" "$scratch/handoff.json"
+check "handoff: designed run completes" '[ "$code" = 0 ] && grep -q "RUN: status=COMPLETE" <<<"$out"'
+check "handoff: the implementer prompt carries the plan node notes" \
+  'grep "IDS: .* implement 1" -A1 "$FAKE_LOG" | grep -q "## Output of plan .*PLAN: write impl.txt"'
+check "handoff: the planner prompt carries no upstream section" '! grep "IDS: .* plan 1" -A1 "$FAKE_LOG" | grep -q "## Output of"'
+check "design: every agent prompt carries the issue and the design" \
+  '[ "$(grep -c "PROMPT: .*## Issue .*ISSUE-MARKER.*## Design .*DESIGN-MARKER" "$FAKE_LOG")" = 2 ]'
+check "design: code nodes get the context file (done_when ran)" \
+  'grep -q DONE-OK "$(find "$repo/odd/runs" -name "verify-1.log")"'
+check "design: allowed edits inside expected_files are committed" \
+  '[ -z "$(git -C "$repo" status --porcelain)" ] && git -C "$repo" ls-files | grep -qx impl.txt'
+
+echo '{"factory": "test", "nodes": [{"id": "implement", "kind": "agent", "prompt_file": "implement.md", "inputs": ["later"]}, {"id": "later", "kind": "code", "command": ["true"]}]}' >"$scratch/bad-inputs.json"
+run "$(new_repo bad-inputs)" "$scratch/bad-inputs.json"
+check "handoff: inputs must name earlier nodes" '[ "$code" = 2 ] && grep -q "input \"later\" must be an earlier node" <<<"$out"'
+
+repo="$(new_repo decision)"
+FAKE_MODE=decision drun "$repo" "$scratch/handoff.json"
+check "decision: a DECISION: last line stops the run (exit 1, needs_decision)" \
+  '[ "$code" = 1 ] && grep -q "RUN: status=STOPPED node=plan reason=user_decision_required detail=should the symlink be followed or copied?" <<<"$out"'
+check "decision: the receipt status is needs_decision" \
+  '[ "$(receipt "$repo" 1 | jq -r "[.outcome.status,.outcome.terminal_reason]|join(\",\")")" = "needs_decision,user_decision_required" ]'
+rid="$(receipt "$repo" 1 | jq -r .run_id)"
+FAKE_MODE=edit drun "$repo" "$scratch/handoff.json" --run-id "$rid"
+check "decision: resuming does not re-run the node until the design changes" \
+  '[ "$code" = 1 ] && grep -q "reason=user_decision_required" <<<"$out" && [ "$(count_receipts "$repo")" = 1 ]'
+
+repo="$(new_repo outside)"
+FAKE_MODE_plan=plan FAKE_MODE_implement=outside drun "$repo" "$scratch/handoff.json"
+check "expected-files: an edit outside expected_files stops the run" \
+  '[ "$code" = 1 ] && grep -q "RUN: status=STOPPED node=implement reason=unexpected_path_modified detail=.*other.txt" <<<"$out"'
+check "expected-files: the violation is not committed and not retried" \
+  '[ "$(git -C "$repo" rev-list --count HEAD)" = 1 ] && [ "$(count_receipts "$repo")" = 2 ]'
+
+# --- collect (factory#3 step 1) -------------------------------------------------
+
+cat >"$scratch/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+# gh double: serves issue 7 of FullFran/bifrost from $FAKE_GH_DIR.
+printf '%s\n' "$*" >>"${FAKE_GH_DIR:?}/calls"
+case "$1 $2" in
+  "issue view") cat "$FAKE_GH_DIR/issue.json" ;;
+  "api repos/FullFran/bifrost/issues/7/comments") cat "$FAKE_GH_DIR/comments.json" ;;
+  *) echo "gh double: unexpected $*" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$scratch/bin/gh"
+export FACTORY_GH_BIN="$scratch/bin/gh"
+design_body() { # design_body JSON -> a design comment body around that block
+  printf '<!-- factory-design:v1\n%s\n-->\n\n# Resolve the bifrost binary\n\nDone when the test passes.\n' "$1"
+}
+good='{"schema_version": "1.0", "issue": 7, "ready_signal": "factory:ready", "done_when": "node --test pi/bifrost.test.mjs", "expected_files": ["pi/runtime.mjs", "pi/bifrost.test.mjs"]}'
+setup_gh() { # setup_gh LABEL DESIGN_JSON -> fresh $FAKE_GH_DIR
+  export FAKE_GH_DIR; FAKE_GH_DIR="$(mktemp -d "$scratch/gh.XXXX")"
+  jq -n --arg l "$1" '{number:7,url:"https://github.com/FullFran/bifrost/issues/7",title:"agy: spawn bifrost ENOENT",
+    body:"Every agy run fails.",labels:[{name:"bug"},{name:$l}]}' >"$FAKE_GH_DIR/issue.json"
+  jq -n --arg old "$(design_body "${good/node --test/OLD}")" --arg new "$(design_body "$2")" '[[
+    {id:1,html_url:"u1",updated_at:"2026-11-09T00:00:00Z",body:"just chatting"},
+    {id:2,html_url:"u2",updated_at:"2026-11-09T01:00:00Z",body:$old}],[
+    {id:3,html_url:"https://github.com/FullFran/bifrost/issues/7#issuecomment-3",updated_at:"2026-11-10T02:00:00Z",body:$new}]]' \
+    >"$FAKE_GH_DIR/comments.json"
+}
+new_checkout() { # new_checkout NAME -> clone of a bare origin with main
+  local origin="$scratch/$1-origin.git" src; src="$(new_repo "$1-src")"
+  git clone -q --bare "$src" "$origin" && git clone -q "$origin" "$scratch/$1" && printf '%s' "$scratch/$1"
+}
+collect() { # collect CHECKOUT OUT -> sets out, code
+  out="$("$factory" collect --repo FullFran/bifrost --issue 7 --checkout "$1" --out "$2" 2>&1)"
+  code=$?
+}
+setup_gh factory:ready "$good"
+co="$(new_checkout collect-ok)"
+collect "$co" "$scratch/collect-ok-out"
+ctx="$scratch/collect-ok-out/context.json"
+check "collect: ready issue with a valid design exits 0" '[ "$code" = 0 ] && grep -q "COLLECT: status=READY" <<<"$out"'
+check "collect: pins the latest design comment by id, url, sha256 and updated_at" \
+  '[ "$(jq -c .design_comment "$ctx")" = "$(jq -nc --arg s "$(jq -r ".[1][0].body" "$FAKE_GH_DIR/comments.json" | tr -d "\n" | head -c0; jq -j ".[1][0].body" "$FAKE_GH_DIR/comments.json" | sha256sum | cut -d" " -f1)" "{id:3,url:\"https://github.com/FullFran/bifrost/issues/7#issuecomment-3\",sha256:\$s,updated_at:\"2026-11-10T02:00:00Z\"}")" ]'
+check "collect: context carries repository, issue, done_when and expected_files" \
+  '[ "$(jq -c "[.repository,.issue.number,.issue.url,.done_when,.expected_files]" "$ctx")" = "[\"FullFran/bifrost\",7,\"https://github.com/FullFran/bifrost/issues/7\",\"node --test pi/bifrost.test.mjs\",[\"pi/runtime.mjs\",\"pi/bifrost.test.mjs\"]]" ]'
+check "collect: writes the design and issue texts next to the context" \
+  'grep -q "Resolve the bifrost binary" "$scratch/collect-ok-out/design.md" && grep -q "Every agy run fails." "$scratch/collect-ok-out/issue.md" && grep -q "agy: spawn bifrost ENOENT" "$scratch/collect-ok-out/issue.md"'
+check "collect: checks out factory/7 from origin's default branch" \
+  '[ "$(git -C "$co" rev-parse --abbrev-ref HEAD)" = factory/7 ] && [ "$(git -C "$co" rev-parse HEAD)" = "$(git -C "$co" rev-parse origin/main)" ]'
+check "collect: the context is accepted by run" \
+  'out="$("$factory" run --spec "$scratch/spec.json" --repo "$co" --context "$ctx" 2>&1)"; grep -q "RUN: id=.* task=FullFran/bifrost#7" <<<"$out"'
+collect "$co" "$scratch/collect-again"
+check "collect: refuses when factory/7 already exists" '[ "$code" = 2 ] && grep -q "branch factory/7 already exists" <<<"$out"'
+
+setup_gh other "$good"
+collect "$(new_checkout collect-nolabel)" "$scratch/o1"
+check "collect: without factory:ready the issue is not ready (exit 1)" \
+  '[ "$code" = 1 ] && grep -q "COLLECT: status=NOT_READY reason=missing label factory:ready" <<<"$out" && [ ! -e "$scratch/o1/context.json" ]'
+not_ready() { # not_ready NAME DESIGN_JSON EXPECTED_REASON
+  setup_gh factory:ready "$2"
+  collect "$(new_checkout "collect-$1")" "$scratch/out-$1"
+  want="$3"
+  check "collect: $1 is not ready" '[ "$code" = 1 ] && grep -qF "$want" <<<"$out" && grep -q "COLLECT: status=NOT_READY" <<<"$out"'
+}
+not_ready unknown-key "${good/\"issue\": 7/\"issue\": 7, \"extra\": 1}" 'unknown field "extra"'
+not_ready no-done-when "${good/\"done_when\": \"node --test pi\/bifrost.test.mjs\", /}" 'done_when'
+not_ready wrong-issue "${good/\"issue\": 7/\"issue\": 8}" 'design is for issue 8'
+not_ready absolute-path "${good/pi\/runtime.mjs/\/etc\/passwd}" 'expected_files entry "/etc/passwd"'
+not_ready dotdot-path "${good/pi\/runtime.mjs/pi\/..\/..\/x}" 'expected_files entry "pi/../../x"'
+not_ready protected-path "${good/pi\/runtime.mjs/gates\/gate.sh}" 'expected_files entry "gates/gate.sh"'
+not_ready bad-json '{"schema_version": ' 'design block is not valid JSON'
 
 # --- misconfiguration and portability ----------------------------------------
 
