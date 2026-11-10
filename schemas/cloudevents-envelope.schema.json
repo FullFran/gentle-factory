@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gentle-factory:schema:cloudevents-envelope:0.1",
+  "title": "CloudEvents Envelope for gentle-factory Receipts",
+  "description": "Standard CNCF CloudEvents v1.0.2 event envelope wrapping a gentle-factory node receipt.",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "data"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version."
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique event identifier."
+    },
+    "source": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "Context URI of the factory instance or runner."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^org\\.gentle-factory\\.node\\.receipt$",
+      "description": "CloudEvents event type."
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of event generation."
+    },
+    "subject": {
+      "type": "string",
+      "description": "Subject identifier (e.g. run/node identifier)."
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json"
+    },
+    "dataschema": {
+      "type": "string",
+      "const": "urn:gentle-factory:schema:receipt:0.1"
+    },
+    "data": {
+      "$ref": "receipt.schema.json"
+    }
+  }
+}
