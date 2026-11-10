@@ -100,18 +100,20 @@ worktree requiring manual removal with `git worktree remove --force <path>`.
 
 ## Node runner (#2)
 
-`runner/factory.py` runs the nodes of a factory against a target repository and
-writes one receipt per node attempt ([receipt format](docs/design/receipt-format.md)).
-It needs Python 3 (standard library only) and Git; agent nodes also need `claude`.
+`cmd/factory` (Go, standard library only) runs the nodes of a factory against a target
+repository and writes one receipt per node attempt ([receipt format](docs/design/receipt-format.md)).
+It builds to one static binary; at run time it needs Git, and agent nodes also need `claude`.
 
 ```bash
-python3 runner/factory.py run --spec factory.json --repo /path/to/target --context context.json
-python3 runner/factory.py run ... --run-id <id>        # resume: completed nodes are skipped
-python3 runner/factory.py summary --repo /path/to/target [--json]
-bash tests/runner-test.sh                               # uses a claude double, spends nothing
+go build -o bin/factory ./cmd/factory
+bin/factory run --spec factory.json --repo /path/to/target --context context.json
+bin/factory run ... --run-id <id>        # resume: completed nodes are skipped
+bin/factory summary --repo /path/to/target [--json]
+bash tests/runner-test.sh                # builds the binary, uses a claude double, spends nothing
 ```
 
-The spec lists nodes in order. Paths in it are relative to the spec file; code
+The spec lists nodes in order; unknown fields are rejected, so a misspelt key
+cannot silently drop a guard. Paths in it are relative to the spec file; code
 commands run from the target root and may use `{repo}`, `{base_commit}`,
 `{run_dir}`, `{spec_dir}` and `{feedback_file}`.
 

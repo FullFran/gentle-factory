@@ -1,7 +1,7 @@
 # runner
 
 Objective: the generic node runner every factory step runs on (gentle-factory#2), receipt-driven per docs/design/node-contract.md §5.
-Branch: feat/runner. Delivery: one PR to main (ask-on-risk). Test runner: bash scripts through the public CLI (`tests/runner-test.sh`), with engine doubles.
+Branch: feat/runner. Delivery: one PR to main (ask-on-risk). Test runner: bash scripts through the public CLI (`tests/runner-test.sh`, builds `cmd/factory`), with engine doubles.
 
 ## Specs
 
@@ -15,7 +15,7 @@ Branch: feat/runner. Delivery: one PR to main (ask-on-risk). Test runner: bash s
 
 Assumptions (marked, not user-stated):
 - A1: v1 runs nodes as local subprocesses behind a run-adapter seam (`code`, `claude`); the Orca transport and the pi/codex/agy adapters from the #2 scope-change comment are later work. Rationale: node contract says v1 is Claude-only and deterministic nodes run as plain code.
-- A2: Python 3 standard library, no dependencies, so it runs on any workbox with python3 and git.
+- A2: Go standard library, one static binary (was Python until L6).
 - A3: issue and design-comment references come from a `--context` JSON file (the design gate of #3 produces it); the runner never fetches GitHub.
 
 ## Tasks
@@ -33,3 +33,4 @@ Route evidence: one behavior chain where each task depends on the previous one, 
 - L3 (2026-11-10): Real `claude` 2.1.322 smoke run in a scratch repo: flags accepted, the agent wrote the file, the run stopped with budget_exceeded because one turn cost $0.42 against a $0.10 cap (the cap is checked between turns, and the laptop's user config inflates the first turn). Top-level `usage` was all zeros on that error result; token counts come from `modelUsage`, so the runner now sums them there and the double mirrors that shape.
 - L4: One work-unit commit: T1-T3 are one dependent behavior chain (runner, its guards, its summary) with its tests and docs; splitting it would cut a single behavior. Open: workbox run (S7 second half) not done here; Orca transport and other engines (A1); default caps uncalibrated; consider `--setting-sources`/`--strict-mcp-config` so a box's agent does not load user config.
 - L5 (2026-11-10): Independent verifier (risk item 2, guards): S1, S2, S4-S7 met, S3 partial with 3 blockers. B1 protected guard blind to gitignored paths; B2 blind to rewrites of files already untracked; B3 a read-only trip was retried and the next producer commit absorbed the violation. One correction batch: protected paths and the store are snapshotted from the filesystem (files, symlinks, directories), guard trips are final (no retry, resume stops again), a new run needs a clean tree, run ids must start alphanumeric, store subdirectories are recreated before writes, protected entries are normalized. 5 new tests fail on d871070 and pass after; runner-test 43/43.
+- L6 (2026-11-10, verbatim): «por qué python y no go?» … «porta a go anda». Ported to Go (cmd/factory, internal/runner); the black-box suite is the contract: 43/43 on the Go binary unchanged except the build step and one numeric JSON comparison. Eight mutations of the Go code each fail at least one test. New: spec and context reject unknown fields (one test). Not repeated: the paid real-claude smoke run; the argv shape is pinned by the double's tests.

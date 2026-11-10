@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Contract tests for runner/factory.py, through its public CLI.
+# Contract tests for the factory runner (cmd/factory), through its public CLI.
 # Agent nodes run against a claude double; no model is called and nothing is spent.
-# Needs bash, git, python3 and jq. Exit 77 when a tool is missing.
+# Needs bash, git, go and jq. Exit 77 when a tool is missing.
 # Assertions are single-quoted strings evaluated by check(), so expansion happens there.
 # shellcheck disable=SC2016,SC2034
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-runner="$here/runner/factory.py"
-for tool in git python3 jq; do
+for tool in git go jq; do
   command -v "$tool" >/dev/null 2>&1 || { printf 'SKIP missing-tool:%s\n' "$tool"; exit 77; }
 done
 validator=()
@@ -17,6 +16,8 @@ elif command -v uvx >/dev/null 2>&1; then validator=(uvx -q check-jsonschema); f
 
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/gentle-factory-runner-test.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
+factory="$scratch/factory"
+(cd "$here" && go build -o "$factory" ./cmd/factory) || { printf 'FAIL go build\n'; exit 1; }
 pass=0
 fail=0
 
@@ -101,7 +102,7 @@ EOF
 }
 
 run() { # run REPO SPEC [extra args] -> sets out, code
-  out="$(python3 "$runner" run --spec "$2" --repo "$1" --context "$scratch/context.json" "${@:3}" 2>&1)"
+  out="$("$factory" run --spec "$2" --repo "$1" --context "$scratch/context.json" "${@:3}" 2>&1)"
   code=$?
 }
 receipt() { # receipt REPO N -> predicate of the Nth receipt (1-based) of the only run
@@ -278,12 +279,12 @@ check "timeout: the step is killed and fails with timeout" \
 repo="$(new_repo summary)"
 PASS_AT=2 run "$repo" "$scratch/spec.json"
 PASS_AT=9 run "$repo" "$scratch/spec.json"
-summary_json="$(python3 "$runner" summary --repo "$repo" --json)"
+summary_json="$("$factory" summary --repo "$repo" --json)"
 check "summary: cost recorded once per agent attempt (5 attempts x 0.25)" \
-  '[ "$(jq -r ".nodes.implement.cost_usd" <<<"$summary_json")" = 1.25 ] && [ "$(jq -r ".nodes.verify.cost_usd" <<<"$summary_json")" = 0.0 ]'
+  'jq -e ".nodes.implement.cost_usd == 1.25 and .nodes.verify.cost_usd == 0" <<<"$summary_json" >/dev/null'
 check "summary: counts runs, failures and retries" \
   '[ "$(jq -c "[.runs,.nodes.verify.failures,.nodes.implement.retries]" <<<"$summary_json")" = "[2,4,3]" ]'
-summary_text="$(python3 "$runner" summary --repo "$repo")"
+summary_text="$("$factory" summary --repo "$repo")"
 check "summary: names the step that fails, retries and costs the most" \
   'grep -qx "MOST: failures=verify retries=implement cost=implement" <<<"$summary_text"'
 
@@ -292,13 +293,16 @@ check "summary: names the step that fails, retries and costs the most" \
 echo '{"factory": "test", "nodes": [{"id": "x", "kind": "code", "command": ["true"], "retry": "nope"}]}' >"$scratch/bad.json"
 run "$(new_repo bad)" "$scratch/bad.json"
 check "spec: an invalid spec exits 2 with MISCONFIGURED" '[ "$code" = 2 ] && grep -q "RUN: status=MISCONFIGURED" <<<"$out"'
+echo '{"factory": "test", "nodes": [{"id": "x", "kind": "code", "command": ["true"], "readonly": true}]}' >"$scratch/typo.json"
+run "$(new_repo typo)" "$scratch/typo.json"
+check "spec: an unknown field (a misspelt guard) is rejected" '[ "$code" = 2 ] && grep -q "unknown field" <<<"$out"'
 run "$(new_repo bad-id)" "$scratch/spec.json" --run-id ..
 check "spec: run id .. is rejected" '[ "$code" = 2 ] && grep -q "run id must match" <<<"$out"'
 repo="$(new_repo dirty)"
 echo wip >>"$repo/README.md"
 run "$repo" "$scratch/spec.json"
 check "spec: a new run refuses a dirty target tree" '[ "$code" = 2 ] && grep -q "uncommitted changes" <<<"$out"'
-check "portability: no laptop paths in the runner" '! grep -nE "/home/|/Users/|~/" "$runner"'
+check "portability: no laptop paths in the runner" '! grep -rnE "/home/|/Users/|~/" "$here/cmd" "$here/internal"'
 
 printf 'RESULT: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" = 0 ]
