@@ -248,3 +248,10 @@ func (s *Store) feedbackPath(nodeID string) string {
 	_ = os.MkdirAll(filepath.Join(s.runDir, "feedback"), 0o755)
 	return filepath.Join(s.runDir, "feedback", nodeID+".txt")
 }
+
+// outputPath holds the full final answer of a node's last successful agent attempt,
+// read by later nodes that list it in `inputs`.
+func (s *Store) outputPath(nodeID string) string {
+	_ = os.MkdirAll(filepath.Join(s.runDir, "outputs"), 0o755)
+	return filepath.Join(s.runDir, "outputs", nodeID+".md")
+}

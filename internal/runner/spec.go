@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -39,6 +40,7 @@ type Node struct {
 	Deny           []string `json:"deny,omitempty"`
 	ReadOnly       bool     `json:"read_only,omitempty"`
 	Retry          string   `json:"retry,omitempty"`
+	Inputs         []string `json:"inputs,omitempty"`
 	Command        []string `json:"command,omitempty"`
 	MaxTurns       *int     `json:"max_turns,omitempty"`
 	MaxBudgetUSD   *float64 `json:"max_budget_usd,omitempty"`
@@ -81,6 +83,12 @@ type Context struct {
 	Issue         *IssueRef      `json:"issue"`
 	DesignComment *DesignComment `json:"design_comment"`
 	TaskID        string         `json:"task_id,omitempty"`
+	// Set by `factory collect` from the design comment (gentle-factory#3).
+	DoneWhen      string   `json:"done_when,omitempty"`
+	ExpectedFiles []string `json:"expected_files,omitempty"`
+	DesignFile    string   `json:"design_file,omitempty"`
+	IssueFile     string   `json:"issue_file,omitempty"`
+	path          string
 }
 
 type IssueRef struct {
@@ -169,6 +177,11 @@ func loadSpec(path string) (*Spec, error) {
 		if node.Role != "producer" && node.Role != "checker" {
 			return nil, specErr("node %s: role must be producer or checker", node.ID)
 		}
+		for _, in := range node.Inputs {
+			if seen[in] == nil {
+				return nil, specErr("node %s: input %q must be an earlier node", node.ID, in)
+			}
+		}
 		if node.Retry != "" {
 			target := seen[node.Retry]
 			if target == nil {
@@ -219,8 +232,59 @@ func loadContext(path string) (*Context, error) {
 	if ctx.DesignComment == nil {
 		return nil, specErr("context.design_comment is required")
 	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, specErr("cannot resolve context path: %v", err)
+	}
+	ctx.path = abs
+	for _, f := range []*string{&ctx.DesignFile, &ctx.IssueFile} {
+		if *f == "" {
+			continue
+		}
+		if !filepath.IsAbs(*f) {
+			*f = filepath.Join(filepath.Dir(abs), *f)
+		}
+		if st, err := os.Stat(*f); err != nil || !st.Mode().IsRegular() {
+			return nil, specErr("context file %s not found", *f)
+		}
+	}
+	for _, entry := range ctx.ExpectedFiles {
+		if err := checkExpectedFile(entry); err != nil {
+			return nil, specErr("context: %v", err)
+		}
+	}
 	if ctx.TaskID == "" {
 		ctx.TaskID = fmt.Sprintf("%s#%d", ctx.Repository, ctx.Issue.Number)
 	}
 	return ctx, nil
+}
+
+var expectedFileBad = regexp.MustCompile(`(^|/)\.\.?(/|$)|//|^(\.factory|\.git|odd/runs|gates)(/|$)`)
+
+// checkExpectedFile applies the design-comment schema rules to one expected_files entry.
+func checkExpectedFile(entry string) error {
+	if entry == "" || strings.ContainsAny(entry[:1], "/ \t\r\n") || expectedFileBad.MatchString(entry) {
+		return fmt.Errorf("expected_files entry %q must be a normalized repository-relative path outside .factory/, .git/, odd/runs/ and gates/", entry)
+	}
+	return nil
+}
+
+// matchExpected reports whether a repository path is covered by an expected_files
+// entry: an exact path, a path.Match glob, or a "dir/**" (or "dir/") prefix.
+func matchExpected(patterns []string, p string) bool {
+	for _, pat := range patterns {
+		if pat == p {
+			return true
+		}
+		if prefix, ok := strings.CutSuffix(pat, "/**"); ok && strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+		if strings.HasSuffix(pat, "/") && strings.HasPrefix(p, pat) {
+			return true
+		}
+		if ok, _ := path.Match(pat, p); ok {
+			return true
+		}
+	}
+	return false
 }

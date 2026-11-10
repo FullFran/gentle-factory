@@ -106,10 +106,12 @@ It builds to one static binary; at run time it needs Git, and agent nodes also n
 
 ```bash
 go build -o bin/factory ./cmd/factory
+bin/factory collect --repo OWNER/NAME --issue N --checkout /path/to/target --out /path/to/ctx
 bin/factory run --spec factory.json --repo /path/to/target --context context.json
 bin/factory run ... --run-id <id>        # resume: completed nodes are skipped
 bin/factory summary --repo /path/to/target [--json]
-bash tests/runner-test.sh                # builds the binary, uses a claude double, spends nothing
+bash tests/runner-test.sh                # builds the binary, uses claude and gh doubles, spends nothing
+bash tests/layer-bifrost-test.sh         # the bifrost layer's nodes, with doubles
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -130,7 +132,16 @@ commands run from the target root and may use `{repo}`, `{base_commit}`,
 
 The context file holds the references every receipt carries and the runner never fetches:
 `repository`, `issue` (`number`, `url`), `design_comment` (`id`, `url`, `sha256`, `updated_at`)
-and an optional `task_id` (default `<repository>#<issue>`).
+and an optional `task_id` (default `<repository>#<issue>`). `collect` also writes
+`done_when`, `expected_files`, `design_file` and `issue_file` (paths relative to the context file).
+
+**Collect (design gate, #3):** `collect` reads the issue with `gh`, requires the
+`factory:ready` label and the latest comment with a `<!-- factory-design:v1 {...} -->`
+block valid against [the design schema](schemas/design-comment.schema.json), pins that
+comment's id, url, sha256 and `updated_at`, writes `context.json`, `design.md` and
+`issue.md` to `--out`, and creates branch `factory/<issue>` from origin's default branch
+in a clean `--checkout`. An issue that is not ready prints `COLLECT: status=NOT_READY
+reason=...` and exits 1. `FACTORY_GH_BIN` overrides `gh`.
 
 Behavior:
 
@@ -139,7 +150,12 @@ Behavior:
   `git reset`, `gh` plus the node's `deny`. A `read_only` agent also loses `Edit`,
   `Write`, `NotebookEdit` and `git commit`. Cost, turns, tokens and model come from
   the engine JSON; the agent's final text is the receipt's `notes`.
-  `FACTORY_CLAUDE_BIN` overrides the binary.
+  `FACTORY_CLAUDE_BIN` overrides the binary. The prompt gets the issue and the design
+  (from the context) and, for each node in the node's `inputs`, its full final answer
+  (`## Output of <node>`, kept in `<run_dir>/outputs/`).
+- **Decisions:** an agent whose last line starts with `DECISION:` stops the run with
+  status `needs_decision` (`user_decision_required`): silence in the design means stop.
+  Resuming stops again until HEAD changes.
 - **Failure:** a nonzero exit, a gate verdict other than GREEN, or a last output line
   starting with `FALLO:` (for agents, the last line of the result text). A
   `FACTORY_GATES: status=MISCONFIGURED` verdict, or exit 126/127, stops the run
@@ -149,7 +165,9 @@ Behavior:
   --porcelain`, the working diff, untracked files or HEAD changed. An agent node fails
   with `protected_path_modified` if any file, symlink or directory under a protected
   path or the receipt store changed; both are read from the filesystem, so gitignored
-  and untracked files count. Guards run before the receipt is written, and a guard
+  and untracked files count. A producer agent fails with `unexpected_path_modified` if
+  it changed a path the context's `expected_files` does not cover (exact path, glob, or
+  `dir/**`). Guards run before the receipt is written, and a guard
   trip is final: it is never retried, and resuming stops again.
 - **Clean start:** a new run refuses a target with uncommitted changes (exit 2), so
   everything the runner commits comes from the run's own nodes.
@@ -162,13 +180,14 @@ Behavior:
   `failure_signature`, the run stops with that reason.
 - **Receipts drive the flow:** the next node is the first one without a current
   success receipt. A checker receipt (code and `read_only` nodes) is stale once HEAD
-  moves; a producer receipt stays current.
+  moves; a producer receipt stays current, so a planner is `"role": "producer",
+  "read_only": true` (otherwise it re-runs after every commit).
 - **Identity:** every node gets `FACTORY_NAME`, `FACTORY_RUN_ID`, `FACTORY_TASK_ID`,
-  `FACTORY_NODE_ID`, `FACTORY_ATTEMPT`, a W3C `TRACEPARENT` (one trace per run), and
+  `FACTORY_NODE_ID`, `FACTORY_ATTEMPT`, `FACTORY_CONTEXT_FILE`, a W3C `TRACEPARENT` (one trace per run), and
   `OTEL_RESOURCE_ATTRIBUTES` with `service.name=factory-<name>`, `factory.name`,
   `run.id`, `task.id` and `agent.engine` (#6).
 
-The store is `<repo>/odd/runs/<run_id>/` (`receipts/`, `logs/`, `feedback/`), or `--runs-dir`.
+The store is `<repo>/odd/runs/<run_id>/` (`receipts/`, `logs/`, `feedback/`, `outputs/`), or `--runs-dir`.
 The runner adds it to `.git/info/exclude`, so it never shows up in `git status` and
 is never committed. Output lines are `NODE: ...`, `RETRY: ...` and one final
 `RUN: status=COMPLETE|STOPPED ...`. Exit codes: `0` complete, `1` stopped, `2` invalid
@@ -177,5 +196,18 @@ failures, retries, cost and duration per node across runs, and a
 `MOST: failures=<node> retries=<node> cost=<node>` line.
 
 Not yet: Orca transport and the pi, codex and agy adapters (#2 scope comment), the
-stale-output reaper and stuck guard from the node contract §4.3, and the design gate
-that produces the context file (#3).
+stale-output reaper and stuck guard from the node contract §4.3, and the design's
+`gate_level`, `budget_cap_usd`, `turn_cap` and `timeout_seconds` (accepted, not yet applied).
+
+## Bifrost layer (#3)
+
+`layers/bifrost/` turns a designed FullFran/bifrost issue into a draft PR:
+`plan` (read-only) → `implement` (gets the plan) → `tests` (`node --test pi/bifrost.test.mjs`,
+`go test ./...` and the design's `done_when`) → `review` (read-only, a separate claude with
+the rubric built from merged bifrost PRs; `FALLO:` sends the change back) → `output`
+(pushes `factory/<issue>` and opens a **draft** PR with the run's telemetry). Merge waits for Fran.
+
+```bash
+bin/factory collect --repo FullFran/bifrost --issue N --checkout "$co" --out "$ctx"
+bin/factory run --spec layers/bifrost/factory.json --repo "$co" --context "$ctx/context.json"
+```

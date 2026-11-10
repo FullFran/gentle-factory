@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-const failPrefix = "FALLO:"
+const (
+	failPrefix     = "FALLO:"
+	decisionPrefix = "DECISION:"
+)
 
 var (
 	deniedBash     = []string{"Bash(git push:*)", "Bash(git tag:*)", "Bash(git reset:*)", "Bash(gh:*)"}
@@ -37,7 +40,7 @@ type result struct {
 	exitCode                       int
 	telemetry                      Telemetry
 	gate                           *Gate
-	notes                          string
+	notes, output                  string
 	spanID                         string
 	logOut, logErr                 string
 }
@@ -107,6 +110,7 @@ func nodeEnv(rc *runCtx, node *Node, attempt int, feedbackFile, engine string) [
 		"FACTORY_NODE_ID":          node.ID,
 		"FACTORY_ATTEMPT":          strconv.Itoa(attempt),
 		"FACTORY_FEEDBACK_FILE":    feedbackFile,
+		"FACTORY_CONTEXT_FILE":     rc.context.path,
 		"TRACEPARENT":              rc.traceparent,
 		"OTEL_RESOURCE_ATTRIBUTES": mergeOtel(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"), attrs),
 	}
@@ -197,9 +201,33 @@ func tokenUsage(d *claudeResult) *Tokens {
 	return &Tokens{InputTokens: in, OutputTokens: out, TotalTokens: in + out}
 }
 
-func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string) *result {
+// promptSections appends the issue, the design and the upstream outputs to a node prompt.
+func promptSections(rc *runCtx, upstream [][2]string) (string, error) {
+	var b strings.Builder
+	for _, s := range [][2]string{{"Issue", rc.context.IssueFile}, {"Design", rc.context.DesignFile}} {
+		if s[1] == "" {
+			continue
+		}
+		data, err := os.ReadFile(s[1])
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("\n\n## " + s[0] + "\n\n" + strings.TrimSpace(string(data)) + "\n")
+	}
+	for _, u := range upstream {
+		b.WriteString("\n\n## Output of " + u[0] + "\n\n" + strings.TrimSpace(u[1]) + "\n")
+	}
+	return b.String(), nil
+}
+
+func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string, upstream [][2]string) *result {
 	data, err := os.ReadFile(node.PromptFile)
 	prompt := string(data)
+	if err == nil {
+		var extra string
+		extra, err = promptSections(rc, upstream)
+		prompt += extra
+	}
 	cmd, tools := claudeCommand(node)
 	timeout := node.timeout(1800)
 	turns, budget := node.maxTurns(), node.maxBudget()
@@ -207,7 +235,7 @@ func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string
 		caps: Caps{MaxTurns: &turns, MaxBudgetUSD: &budget, TimeoutSeconds: timeout}}
 	if err != nil {
 		res.logErr = err.Error()
-		return res.fail("misconfigured", "misconfigured", "cannot read prompt_file")
+		return res.fail("misconfigured", "misconfigured", "cannot read the prompt, issue, design or upstream output")
 	}
 	if feedback != "" {
 		prompt += "\n\n## Feedback from the previous attempt\n\n" +
@@ -235,9 +263,13 @@ func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string
 	} else {
 		res.notes = d.Result
 	}
+	res.output = d.Result
 	final := lastLine(d.Result)
 	if strings.HasPrefix(final, failPrefix) {
 		return res.fail("failure", "step_failed", strings.TrimSpace(final[len(failPrefix):]))
+	}
+	if strings.HasPrefix(final, decisionPrefix) {
+		return res.fail("needs_decision", "user_decision_required", strings.TrimSpace(final[len(decisionPrefix):]))
 	}
 	if d.IsError || d.Subtype != "success" || code != 0 {
 		reason, ok := claudeReasons[d.Subtype]

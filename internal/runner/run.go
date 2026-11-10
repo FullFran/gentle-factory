@@ -17,7 +17,8 @@ const (
 )
 
 // A guard trip is final: retrying would let the next producer commit the violation.
-var guardReasons = map[string]bool{"read_only_modified": true, "protected_path_modified": true}
+var guardReasons = map[string]bool{"read_only_modified": true, "protected_path_modified": true,
+	"unexpected_path_modified": true}
 
 // runCtx is the state shared by every node of one run.
 type runCtx struct {
@@ -91,13 +92,25 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 	if err != nil {
 		return nil, nil, err
 	}
+	headBefore, err := headCommit(rc.repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	upstream := [][2]string{}
+	for _, in := range node.Inputs {
+		data, err := os.ReadFile(rc.store.outputPath(in))
+		if err != nil {
+			return nil, nil, specErr("node %s: no output of input %s yet", node.ID, in)
+		}
+		upstream = append(upstream, [2]string{in, string(data)})
+	}
 	protectedBefore := pathDigests(rc.repo, rc.protected)
 	storeBefore := pathDigests(rc.store.runsDir, []string{"."})
 	fmt.Fprintf(rc.out, "NODE: id=%s attempt=%d kind=%s\n", node.ID, attempt, node.Kind)
 
 	var res *result
 	if node.Kind == "agent" {
-		res = runAgent(rc, node, attempt, feedback, feedbackFile)
+		res = runAgent(rc, node, attempt, feedback, feedbackFile, upstream)
 		if rc.engineVersion == "" {
 			rc.engineVersion = engineVersion(res.command[0])
 		}
@@ -127,9 +140,23 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 			res.fail("failure", "protected_path_modified", "protected paths changed: "+strings.Join(hits, ", "))
 		}
 	}
+	if node.Kind == "agent" && node.Role == "producer" && len(rc.context.ExpectedFiles) > 0 && res.status == "success" {
+		outside, err := unexpectedPaths(rc.repo, headBefore, rc.context.ExpectedFiles)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(outside) > 0 {
+			res.fail("failure", "unexpected_path_modified", "paths outside the design's expected_files changed: "+strings.Join(outside, ", "))
+		}
+	}
 	// The log goes into the receipt store only after the store integrity check.
 	if err := writeLog(rc.store.logPath(node.ID, attempt), res); err != nil {
 		return nil, nil, err
+	}
+	if res.status == "success" && node.Kind == "agent" {
+		if err := os.WriteFile(rc.store.outputPath(node.ID), []byte(res.output), 0o644); err != nil {
+			return nil, nil, err
+		}
 	}
 	if res.status == "success" && node.Role == "producer" {
 		if err := commitProducerChanges(rc, node, attempt); err != nil {
@@ -245,7 +272,12 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 		if len(mine) > 0 {
 			last = mine[len(mine)-1]
 		}
-		currentFailure := last != nil && last.Outcome.Status == "failure" && last.References.VCS.HeadCommit == head
+		currentFailure := last != nil && last.Outcome.Status == "failure" && last.References.VCS.HeadCommit == head &&
+			!retriedSince(receipts, last, node.Retry)
+		if last != nil && last.Outcome.Status == "needs_decision" && last.References.VCS.HeadCommit == head {
+			// Silence in the design means stop: only a new design (a new run) moves on.
+			return rc.stop(node.ID, last.Outcome.TerminalReason, reasonOf(last)), nil
+		}
 		if currentFailure && guardReasons[last.Outcome.TerminalReason] {
 			return rc.stop(node.ID, last.Outcome.TerminalReason, reasonOf(last)), nil
 		}
@@ -289,4 +321,21 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 			return rc.stop(target.ID, res.terminalReason, firstNonEmpty(res.reason, res.terminalReason)), nil
 		}
 	}
+}
+
+// retriedSince reports whether producer ran again after the checker receipt last:
+// its new attempt may have fixed the reason without moving HEAD (an answer-only fix).
+func retriedSince(receipts []*Predicate, last *Predicate, producer string) bool {
+	if producer == "" {
+		return false
+	}
+	after := false
+	for _, r := range receipts {
+		if r == last {
+			after = true
+		} else if after && r.Step.NodeID == producer {
+			return true
+		}
+	}
+	return false
 }
