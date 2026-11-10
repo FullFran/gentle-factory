@@ -168,7 +168,19 @@ Behavior:
 - **Identity:** every node gets `FACTORY_NAME`, `FACTORY_RUN_ID`, `FACTORY_TASK_ID`,
   `FACTORY_NODE_ID`, `FACTORY_ATTEMPT`, `FACTORY_CONTEXT_FILE`, a W3C `TRACEPARENT` (one trace per run), and
   `OTEL_RESOURCE_ATTRIBUTES` with `service.name=factory-<name>`, `factory.name`,
-  `run.id`, `task.id` and `agent.engine` (#6).
+  `run.id`, `task.id` and `agent.engine` (#6). Existing `OTEL_RESOURCE_ATTRIBUTES`
+  entries (for example `user.name`) are kept; the factory keys replace any value of
+  the same key. `agent.engine` is `claude-code` for agent nodes and `code` for code nodes.
+- **Engines without OTLP:** agent nodes only run Claude Code, which reads
+  `OTEL_RESOURCE_ATTRIBUTES` itself. Another engine (pi, codex, agy) runs today as a
+  code node that wraps its CLI, and it receives the same variables with
+  `agent.engine=code`. An engine that exports OTLP with the standard SDK picks them up
+  unchanged. An engine that ignores the OTEL variables degrades in two steps: the
+  wrapper can pass the plain `FACTORY_*` variables and `TRACEPARENT` to the engine's
+  own logging or flags, and the runner always records `run_id`, `step.node_id`,
+  `execution.engine` (the wrapped command's name), the issue and
+  `telemetry.trace_id` in the node's receipt, so the run stays attributable from
+  receipts even with no telemetry from the engine itself.
 
 The store is `<repo>/odd/runs/<run_id>/` (`receipts/`, `logs/`, `feedback/`, `outputs/`), or `--runs-dir`.
 The runner adds it to `.git/info/exclude`, so it never shows up in `git status` and

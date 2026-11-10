@@ -283,6 +283,24 @@ run "$repo" "$scratch/spec-slow.json"
 check "timeout: the step is killed and fails with timeout" \
   '[ "$code" = 1 ] && grep -q "node=slow reason=timeout" <<<"$out" && [ $((SECONDS - start)) -lt 10 ]'
 
+# --- identity for engines without OTLP (#6 fallback) -------------------------
+
+cat >"$scratch/spec-wrapper.json" <<'EOF'
+{"factory": "test", "nodes": [
+  {"id": "wrapped", "kind": "code", "read_only": true, "command": ["bash", "-c",
+   "echo \"OTEL=$OTEL_RESOURCE_ATTRIBUTES\"; echo \"IDS=$FACTORY_NAME $FACTORY_RUN_ID $FACTORY_TASK_ID $FACTORY_NODE_ID $FACTORY_ATTEMPT\"; echo \"TP=$TRACEPARENT\""]}]}
+EOF
+repo="$(new_repo wrapper)"
+run "$repo" "$scratch/spec-wrapper.json"
+wrapper_log="$(find "$repo/odd/runs" -name wrapped-1.log)"
+run_id="$(receipt "$repo" 1 | jq -r .run_id)"
+check "fallback: a code node wrapping another engine gets the OTEL attributes with agent.engine=code" \
+  '[ "$code" = 0 ] && grep -q "^OTEL=.*service.name=factory-test,factory.name=test,run.id=$run_id,task.id=FullFran/dotfiles#55,agent.engine=code" "$wrapper_log"'
+check "fallback: the same identity arrives as plain FACTORY_* variables" \
+  'grep -qx "IDS=test $run_id FullFran/dotfiles#55 wrapped 1" "$wrapper_log"'
+check "fallback: the receipt keeps run, node, engine and trace for the wrapped engine" \
+  '[ "$(receipt "$repo" 1 | jq -r "[.step.node_id,.execution.engine]|join(\",\")")" = "wrapped,bash" ] && grep -q "^TP=00-$(receipt "$repo" 1 | jq -r .telemetry.trace_id)-" "$wrapper_log"'
+
 # --- summary and cost recorded once ------------------------------------------
 
 repo="$(new_repo summary)"
