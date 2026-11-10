@@ -34,8 +34,8 @@ run_gate() {
   printf 'GATE: name=%s status=%s duration_ms=%s\n' "$name" "$result" "$((end - start))"
 }
 shell_syntax() {
-  local path shebang checker interpreter result=0
-  local -a paths
+  local path shebang checker interpreter word result=0
+  local -a paths words
   # Read the list first and check git's exit code: a failed listing must not look like an empty one.
   mapfile -d '' -t paths < <(git diff --name-only --diff-filter=ACMRT -z "$base" --)
   wait "$!" || { printf 'ERROR: diff-unavailable\n' >&2; return 2; }
@@ -45,9 +45,18 @@ shell_syntax() {
     shebang=${shebang%%$'\n'*}
     checker=
     # Match the interpreter as a whole word: "#!/usr/bin/env wish" is not a shell.
-    if [[ $shebang =~ ^'#!'[[:space:]]*([^[:space:]]+)([[:space:]]+([^[:space:]]+))? ]]; then
-      interpreter=${BASH_REMATCH[1]##*/}
-      [[ $interpreter == env ]] && interpreter=${BASH_REMATCH[3]##*/}
+    if [[ $shebang == '#!'* ]]; then
+      read -ra words <<< "${shebang#'#!'}"
+      interpreter=${words[0]:-}
+      interpreter=${interpreter##*/}
+      if [[ $interpreter == env ]]; then
+        # Skip env's options (-S, -i, ...) and VAR=value assignments to reach the command.
+        interpreter=
+        for word in "${words[@]:1}"; do
+          [[ $word == -* || $word == *=* ]] && continue
+          interpreter=${word##*/}; break
+        done
+      fi
       case $interpreter in
         zsh) checker=zsh ;;
         sh|bash|dash|ksh) checker=bash ;;

@@ -81,7 +81,7 @@ The final line is `PROOF: status=PROVEN|NOT_PROVEN|MISCONFIGURED reason=...`
 counterfactual: `1` by default, or the codes given with `--fail-code <n>` (repeatable,
 for example `--fail-code 101` for `cargo test`). Any other nonzero exit, such as a
 pytest usage error (4) or "no tests collected" (5), is MISCONFIGURED with
-`reason=test-errored`, because no regression test actually ran. A passing test is
+`reason=test-errored`, because no regression test actually ran. Known limit: an exit code cannot tell a failing assertion from a crash that uses the same code (for example a Python import error also exits 1), so read the test output of a PROVEN result; parsing a runner's report (JUnit XML) is the stronger check. A passing test is
 NOT_PROVEN. Missing commands, skipped tests, signals, dirty trees and absent
 non-test changes are MISCONFIGURED. Exit codes
 are respectively `0`, `1`, and `2`. Run the full gate separately to establish

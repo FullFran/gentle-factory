@@ -83,6 +83,8 @@ t_unchanged_syntax() {
 }
 t_shebang_token() { new_repo; printf '#!/usr/bin/env wish\nif then\n' > "$repo/tcl-tool"; commit; gate; verdict 'FACTORY_GATES: status=GREEN' 0; }
 t_sh_shebang() { new_repo; printf '#!/bin/sh\nif then\n' > "$repo/extensionless"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
+t_env_split_shebang() { new_repo; printf '#!/usr/bin/env -S bash -e\nif then\n' > "$repo/split-tool"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
+t_env_assignment_shebang() { new_repo; printf '#!/usr/bin/env LC_ALL=C bash\nif then\n' > "$repo/assign-tool"; commit; gate; verdict 'FACTORY_GATES: status=RED' 1; }
 t_ls_files_failure() {
   new_repo
   printf '#!/bin/bash\n[[ $1 == ls-files ]] && exit 128\nexec %q "$@"\n' "$(command -v git)" > "$repo/bin/git"; chmod +x "$repo/bin/git"
@@ -120,7 +122,7 @@ t_added_deleted() {
   [[ ! -e "$repo/value" && $(< "$repo/added") == new && -z $(git -C "$repo" status --porcelain) ]]
 }
 serial=0
-for test in green red missing_directory missing_tool skipped syntax zsh_selection shebang_token sh_shebang ls_files_failure unchanged_syntax blob blob_boundary all_tests empty_suite invalid_ref proven not_proven dirty untracked missing_command command_error usage_error fail_code interrupt added_deleted; do
+for test in green red missing_directory missing_tool skipped syntax zsh_selection shebang_token sh_shebang env_split_shebang env_assignment_shebang ls_files_failure unchanged_syntax blob blob_boundary all_tests empty_suite invalid_ref proven not_proven dirty untracked missing_command command_error usage_error fail_code interrupt added_deleted; do
   # A separate process preserves errexit inside test functions and isolates fixtures.
   set +e
   (set -e; "t_$test")
