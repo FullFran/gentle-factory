@@ -179,6 +179,29 @@ Not yet: Orca transport and the pi, codex and agy adapters (#2 scope comment), t
 stale-output reaper and stuck guard from the node contract §4.3, and the design's
 `gate_level`, `budget_cap_usd`, `turn_cap` and `timeout_seconds` (accepted, not yet applied).
 
+### Report a run (#15)
+
+```bash
+factory report --runs-dir DIR --run-id ID --context context.json
+```
+
+Derives the terminal state of a run from its receipts (the last receipt decides) and tells the owner:
+
+- **One issue comment** with a hidden `<!-- factory-report:v1 run=ID state=STATE -->` marker: `complete`
+  (with the draft PR link from the output node's `PR: <url>` log line), `needs_decision` (node and the
+  `DECISION:` question) or `stopped` (node, terminal reason and reason), plus attempts and total list-price
+  cost. If a comment with the same marker exists, nothing is posted (`REPORT: status=already-posted`).
+- **Labels:** `needs_decision` removes `factory:ready` and adds `factory:needs-decision` (created when the
+  repository lacks it); `complete` and `stopped` remove `factory:ready`.
+- **Notification:** when `FACTORY_NOTIFY_CMD` is set it runs once, split on spaces without a shell, with a
+  one-line message on stdin. Unset means no notification; a failing command only warns.
+- Answering a decision: edit the design comment and put `factory:ready` back; the watcher (#14) starts a new run.
+
+The comment is deliberately minimal because target repositories can be public: it never includes receipts,
+logs, commands or absolute paths (paths in quoted text become `<path>`, text is capped). Run artifacts stay in
+the receipt store until the factory panel exists. Output is `REPORT: status=posted|already-posted state=...
+issue=OWNER/NAME#N`; exit `0` on success, `2` on missing receipts or context. Test: `bash tests/report-test.sh`.
+
 ## Pipeline (#3)
 
 `pipeline/` is the same for every repository (decision in #1: no per-repository layers):

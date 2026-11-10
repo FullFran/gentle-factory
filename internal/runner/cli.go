@@ -22,6 +22,13 @@ Usage:
       Exit 1 when the issue is not ready.
   factory run --spec SPEC --repo REPO --context CONTEXT [--run-id ID] [--runs-dir DIR]
       Run (or resume, with --run-id) a factory against a target git repository.
+  factory report --runs-dir DIR --run-id ID --context FILE
+      Tell the owner how a run ended: post one issue comment (complete with the
+      draft PR link, needs_decision with the question, or stopped with the
+      reason; idempotent through a hidden marker), swap labels (needs_decision:
+      factory:ready -> factory:needs-decision; otherwise drop factory:ready) and
+      pipe a short message to $FACTORY_NOTIFY_CMD when set. Never posts receipts,
+      logs, commands or absolute paths. Exit 2 on missing receipts or context.
   factory summary [--repo REPO] [--runs-dir DIR] [--json]
       Which node fails, retries or costs the most across runs.
 
@@ -45,10 +52,12 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		code, err = cmdRun(args[1:], stdout, stderr)
 	case "collect":
 		code, err = cmdCollect(args[1:], stdout, stderr)
+	case "report":
+		code, err = cmdReport(args[1:], stdout, stderr)
 	case "summary":
 		code, err = cmdSummary(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want collect, run or summary)", args[0])
+		err = specErr("unknown command %q (want collect, run, report or summary)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
