@@ -55,25 +55,11 @@ func decodeStrictBytes(data []byte, v any) error {
 
 // designSHA is the sha256 of the latest factory-design:v1 comment of an issue ("" when there is none).
 func designSHA(repo string, issue int) (string, error) {
-	raw, err := gh("api", fmt.Sprintf("repos/%s/issues/%d/comments", repo, issue), "--paginate", "--slurp")
-	if err != nil {
+	c, err := latestDesignComment(repo, issue)
+	if err != nil || c == nil {
 		return "", err
 	}
-	var pages [][]struct {
-		Body string `json:"body"`
-	}
-	if err := json.Unmarshal(raw, &pages); err != nil {
-		return "", specErr("cannot read comments JSON: %v", err)
-	}
-	sha := ""
-	for _, page := range pages {
-		for _, c := range page {
-			if designBlockRe.MatchString(c.Body) { // the latest design comment wins, as in collect
-				sha = sha256Text(c.Body)
-			}
-		}
-	}
-	return sha, nil
+	return sha256Text(c.Body), nil
 }
 
 func readyIssues(repo string) ([]int, error) {

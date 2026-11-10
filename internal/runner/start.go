@@ -254,6 +254,12 @@ func startIssue(repo string, issue int, o startOpts, out io.Writer) (res startRe
 			return res
 		}
 		res.run, res.archive = runID, dst
+		// Tell the owner on the issue (#15); a failed report never changes the run's outcome.
+		if runErr == nil {
+			if _, err := report(o.archive, runID, filepath.Join(ctxDir, "context.json"), 0, out, out); err != nil {
+				fmt.Fprintf(out, "START: reason=report failed: %s\n", strings.Join(strings.Fields(err.Error()), " "))
+			}
+		}
 	}
 	return res
 }

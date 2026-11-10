@@ -57,6 +57,8 @@ case "$1 $2" in
     IFS=/ read -r _ owner name _ n _ <<<"$2"
     cat "$FAKE_GH_DIR/comments-$owner+$name-$n.json" ;;
   "pr list") ;;
+  "issue comment") for a in "$@"; do [ "$prev2" = --body-file ] && cat "$a" >>"$FAKE_GH_DIR/report-bodies"; prev2="$a"; done ;;
+  "issue edit"|"label create") ;;
   "pr create") echo "https://github.com/$repo/pull/99" ;;
   *) echo "gh double: unexpected $*" >&2; exit 1 ;;
 esac
@@ -114,6 +116,9 @@ check "start: receipts of the run are archived" \
 check "start: nothing of the run remains under the work root" 'empty_dir "$work"'
 check "start: the agent worked inside a clone under the work root" 'grep -q "^implement $work/" "$FAKE_LOG"'
 check "start: gh repo clone is how the repository was fetched" 'grep -q "^repo clone FullFran/bifrost " "$FAKE_GH_DIR/calls"'
+check "start: reports how the run ended on the issue (#15)" \
+  'grep -q "^issue comment 7 -R FullFran/bifrost" "$FAKE_GH_DIR/calls" && grep -q "factory-report:v1 run=run_.* state=complete" "$FAKE_GH_DIR/report-bodies"'
+check "start: the report drops factory:ready" 'grep -q "^issue edit 7 -R FullFran/bifrost.*--remove-label factory:ready" "$FAKE_GH_DIR/calls"'
 
 : >"$FAKE_LOG"; mkdir -p "$scratch/kept"
 out="$("$factory" start FullFran/bifrost#7 --work-root "$scratch/kept" --archive "$arch" --spec "$scratch/spec.json" --keep 2>&1)"; code=$?

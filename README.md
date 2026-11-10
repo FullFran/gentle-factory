@@ -244,6 +244,8 @@ bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N
    `<archive>/<run_id>` (default `${XDG_DATA_HOME:-$HOME/.local/share}/gentle-factory/runs`),
    then delete the clone. `--keep` leaves the clone for debugging. If the receipts cannot
    be archived the clone is kept so they are not lost.
+5. Report how the run ended on the issue with `factory report` (comment, label swap,
+   `FACTORY_NOTIFY_CMD`); a failed report is printed and never changes the run's outcome.
 
 Nothing of a run remains under the work root once it ends. The last line is
 `START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=OWNER/NAME#N run=<id> archive=<dir>`
