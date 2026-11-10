@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Contract tests for layers/bifrost with claude and gh doubles: nothing is spent or published.
+# Contract tests for the factory pipeline (pipeline/) with claude and gh doubles: nothing is spent or published.
 # Needs bash, git, go and jq. Exit 77 when a tool is missing.
 # shellcheck disable=SC2016
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-layer="$here/layers/bifrost"
+layer="$here/pipeline"
 for tool in git go jq; do
   command -v "$tool" >/dev/null 2>&1 || { printf 'SKIP missing-tool:%s\n' "$tool"; exit 77; }
 done
@@ -52,14 +52,23 @@ git -C "$co" switch -q -c factory/7
 out="$(cd "$co" && "$factory" run --spec "$layer/factory.json" --repo "$co" --context "$FACTORY_CONTEXT_FILE" --runs-dir "$scratch/runs" 2>&1)"; code=$?
 check "spec: loads and runs plan first" '[ "$code" = 1 ] && grep -q "RUN: status=STOPPED node=plan reason=user_decision_required" <<<"$out"'
 
-# check.sh: the done_when failure is named in the FALLO line.
-mkdir -p "$scratch/fakebin"; printf '#!/bin/sh\nexit 0\n' >"$scratch/fakebin/node"; printf '#!/bin/sh\nexit 0\n' >"$scratch/fakebin/go"
+# check.sh: runs only the design's done_when, never repository-specific commands.
+mkdir -p "$scratch/fakebin"
+for b in node go npm make; do printf '#!/bin/sh\necho "%s ran" >>"%s"\n' "$b" "$scratch/repo-cmds" >"$scratch/fakebin/$b"; done
 chmod +x "$scratch/fakebin/"*
 out="$(cd "$co" && PATH="$scratch/fakebin:$PATH" bash "$layer/check.sh" 2>&1)"; code=$?
-check "check: a failing done_when fails the node with FALLO" '[ "$code" = 1 ] && [ "$(tail -1 <<<"$out")" = "FALLO: failed checks: done_when: test -f fixed.txt" ]'
+check "check: a failing done_when fails the node with FALLO" '[ "$code" = 1 ] && [ "$(tail -1 <<<"$out")" = "FALLO: done_when failed: test -f fixed.txt" ]'
 touch "$co/fixed.txt"
 out="$(cd "$co" && PATH="$scratch/fakebin:$PATH" bash "$layer/check.sh" 2>&1)"; code=$?
-check "check: passes when every check passes" '[ "$code" = 0 ] && grep -q "CHECK: node --test pi/bifrost.test.mjs ok" <<<"$out"'
+check "check: passes when done_when passes" '[ "$code" = 0 ] && grep -q "CHECK: done_when ok" <<<"$out"'
+check "check: runs no repository-specific command of its own" '[ ! -e "$scratch/repo-cmds" ]'
+jq '.done_when = ""' "$FACTORY_CONTEXT_FILE" >"$scratch/ctx/empty.json"
+out="$(cd "$co" && FACTORY_CONTEXT_FILE="$scratch/ctx/empty.json" bash "$layer/check.sh" 2>&1)"; code=$?
+check "check: a context without done_when is misconfigured, not a pass" '[ "$code" = 2 ] && grep -q "FACTORY_GATES: status=MISCONFIGURED" <<<"$out"'
+
+# The pipeline is repository-agnostic: no file in it names a repository or its commands.
+check "pipeline: names no repository or repository-specific command" \
+  '! grep -rniE "bifrost|dotfiles|FullFran|node --test|go test|pi/" "$layer"'
 
 # open-pr.sh
 base="$(git -C "$co" rev-parse HEAD)"
@@ -76,7 +85,7 @@ check "output: pushes factory/7 to origin" '[ "$code" = 0 ] && [ "$(git -C "$scr
 check "output: opens a draft PR against main titled by the fix commit" \
   'grep "^pr create" "$FAKE_GH_CALLS" | grep -q -- "--draft --base main --head factory/7 --title fix(pi): resolve the bifrost binary"'
 check "output: the body closes the issue and carries summary, review and telemetry" \
-  'grep -q "^Closes #7" "$FAKE_GH_BODY" && grep -q "Resolved the binary." "$FAKE_GH_BODY" && grep -q APROBADO "$FAKE_GH_BODY" && grep -q "| implement | 1 | 0.5 | 2 |" "$FAKE_GH_BODY" && grep -q "Total cost: 1 USD" "$FAKE_GH_BODY"'
+  'grep -q "^Closes #7" "$FAKE_GH_BODY" && grep -q "Resolved the binary." "$FAKE_GH_BODY" && grep -q APROBADO "$FAKE_GH_BODY" && grep -q "| implement | 1 | 0.5 | 2 |" "$FAKE_GH_BODY" && grep -q "by gentle-factory (\`pipeline/\`)" "$FAKE_GH_BODY" && grep -q "Total cost: 1 USD" "$FAKE_GH_BODY"'
 check "output: prints the PR url" 'grep -qx "PR: https://github.com/FullFran/bifrost/pull/99" <<<"$out"'
 echo '[{"url":"https://github.com/FullFran/bifrost/pull/99"}]' >"$scratch/existing.json"
 : >"$FAKE_GH_CALLS"

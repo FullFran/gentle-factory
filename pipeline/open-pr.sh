@@ -34,7 +34,7 @@ body="$(mktemp)"; trap 'rm -f "$body"' EXIT
   cat "$run_dir/outputs/implement.md" 2>/dev/null || echo "(no implementer summary)"
   printf '\n\n## Review\n\n'
   tail -n 40 "$run_dir/outputs/review.md" 2>/dev/null || echo "(no review output)"
-  printf '\n\n## Run telemetry\n\nRun `%s` by gentle-factory (`layers/bifrost`). Design comment: %s\n\n%s\n' \
+  printf '\n\n## Run telemetry\n\nRun `%s` by gentle-factory (`pipeline/`). Design comment: %s\n\n%s\n' \
     "$run_id" "$(jq -r .design_comment.url "$ctx")" "$telemetry"
 } >"$body"
 url="$("$gh_bin" pr create -R "$repo" --draft --base "$base_branch" \
