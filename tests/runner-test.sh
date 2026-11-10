@@ -47,6 +47,7 @@ mode_var="FAKE_MODE_${FACTORY_NODE_ID}"
 case "${!mode_var:-${FAKE_MODE:-edit}}" in
   edit) echo "attempt $FACTORY_ATTEMPT" >impl.txt ;;
   plan) result=$'PLAN: write impl.txt\nthen stop' ;;
+  failonce) [ "$FACTORY_ATTEMPT" = 1 ] && result=$'the summary leaks a path\nFALLO: remove the local path from the summary' ;;
   decision) result=$'no sé qué hacer\nDECISION: should the symlink be followed or copied?' ;;
   outside) echo "attempt $FACTORY_ATTEMPT" >impl.txt; echo x >other.txt ;;
   noop) : ;;
@@ -355,6 +356,21 @@ check "expected-files: an edit outside expected_files stops the run" \
   '[ "$code" = 1 ] && grep -q "RUN: status=STOPPED node=implement reason=unexpected_path_modified detail=.*other.txt" <<<"$out"'
 check "expected-files: the violation is not committed and not retried" \
   '[ "$(git -C "$repo" rev-list --count HEAD)" = 1 ] && [ "$(count_receipts "$repo")" = 2 ]'
+
+# A checker that failed must run again after its producer retried, even when the
+# producer only changed its answer and HEAD did not move.
+echo "Review the change." >"$scratch/review.md"
+cat >"$scratch/textfix.json" <<EOF
+{"factory": "test", "max_retries": 2,
+ "nodes": [
+  {"id": "implement", "kind": "agent", "prompt_file": "implement.md"},
+  {"id": "review", "kind": "agent", "prompt_file": "review.md", "read_only": true, "retry": "implement"}
+ ]}
+EOF
+repo="$(new_repo textfix)"
+FAKE_MODE_implement=noop FAKE_MODE_review=failonce run "$repo" "$scratch/textfix.json"
+check "retry: a checker re-runs after a producer retry that left HEAD unchanged" \
+  '[ "$code" = 0 ] && grep -q "NODE: id=review attempt=2 kind=agent" <<<"$out" && grep -q "RUN: status=COMPLETE" <<<"$out"'
 
 # --- collect (factory#3 step 1) -------------------------------------------------
 

@@ -272,7 +272,8 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 		if len(mine) > 0 {
 			last = mine[len(mine)-1]
 		}
-		currentFailure := last != nil && last.Outcome.Status == "failure" && last.References.VCS.HeadCommit == head
+		currentFailure := last != nil && last.Outcome.Status == "failure" && last.References.VCS.HeadCommit == head &&
+			!retriedSince(receipts, last, node.Retry)
 		if last != nil && last.Outcome.Status == "needs_decision" && last.References.VCS.HeadCommit == head {
 			// Silence in the design means stop: only a new design (a new run) moves on.
 			return rc.stop(node.ID, last.Outcome.TerminalReason, reasonOf(last)), nil
@@ -320,4 +321,21 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 			return rc.stop(target.ID, res.terminalReason, firstNonEmpty(res.reason, res.terminalReason)), nil
 		}
 	}
+}
+
+// retriedSince reports whether producer ran again after the checker receipt last:
+// its new attempt may have fixed the reason without moving HEAD (an answer-only fix).
+func retriedSince(receipts []*Predicate, last *Predicate, producer string) bool {
+	if producer == "" {
+		return false
+	}
+	after := false
+	for _, r := range receipts {
+		if r == last {
+			after = true
+		} else if after && r.Step.NodeID == producer {
+			return true
+		}
+	}
+	return false
 }
