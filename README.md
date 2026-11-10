@@ -25,37 +25,17 @@ This repository is an HCS catalog root in the metaharness layout, composed with 
 | `packages/` | one folder per package (node, run adapter, gate) |
 | `pipeline/` | the one repository-agnostic pipeline: spec, prompts and code nodes |
 
-## Dotfiles v1 gates (S4)
+## Prove a regression test
 
-Run from this checkout (the target may be a separate repository):
+`gates/prove-test.sh` is the factory's repository-agnostic proof that a new test catches
+the bug: it runs the test without the non-test changes, in a disposable worktree, and
+expects it to fail.
 
 ```bash
-bash gates/gates.sh /path/to/dotfiles <base-ref>
-bash tests/gates-test.sh
+bash tests/prove-test-test.sh
 bash tests/schemas-test.sh   # needs jq, python3 and check-jsonschema (or uvx); exits 77 if missing
 ```
 
-The gate requires Bash, Git, GNU `date`/`stat`, `head`, `tr`, zsh, tmux and jq.
-It reports each gate as `GATE: name=... status=... duration_ms=...`, runs all
-three gates, and ends with exactly one final verdict:
-
-```text
-FACTORY_GATES: status=GREEN
-```
-
-| Gate | Scope |
-|---|---|
-| `shell-syntax` | Changed tracked files relative to the base (including staged/unstaged edits), selected by shell extension or by a shebang whose interpreter is `sh`, `bash`, `dash`, `ksh` or `zsh` (directly or through `env`); `bash -n` or `zsh -n`. Deleted files and symlinks are skipped. |
-| `blob-size` | Every tracked regular file in the working tree; files larger than 1 MiB fail (exactly 1 MiB is allowed). |
-| `scripts-tests` | Every `scripts/tests/*-test.sh`, run with Bash from the target root, without stopping at the first failure. |
-
-Exit codes are `0` (GREEN), `1` (RED), and `2` (MISCONFIGURED).
-Missing tools, an invalid base, a git listing that fails, an absent/empty test directory, or an unavailable
-test (exit 77, 126 or 127) are MISCONFIGURED. MISCONFIGURED takes precedence over
-RED, so incomplete coverage cannot be mistaken for a passing run.
-Tests and their output are not a security boundary; run trusted code in a disposable workbox.
-
-### Prove a regression test
 
 Commit the implementation and its tests, leave the target tree clean (including
 no untracked files), then run from the target repository:
@@ -93,10 +73,8 @@ worktree requiring manual removal with `git worktree remove --force <path>`.
 
 ### Evidence and limits
 
-- **VERIFIED:** the dotfiles [CI workflow](https://github.com/FullFran/dotfiles/blob/main/.github/workflows/ci.yml) checks shell syntax, tracked-file size, and `scripts/tests/*-test.sh` with zsh, tmux and jq installed. This gate narrows syntax to changed files and intentionally treats CI skips (exit 77) as MISCONFIGURED.
 - **VERIFIED:** the [upstream proof script](https://github.com/addyosmani/factory/blob/main/template/.factory/scripts/prove-test.sh) separates tests from non-test changes and requires the test to fail without the fix. This implementation uses a disposable worktree instead of reverse-applying a patch to the caller's checkout.
-- Non-script configuration changes (for example nvim or zsh configuration) have no behavioral tests in this v1 gate. Syntax checks, where applicable, do not establish that the configuration works.
-- The local contract tests use throwaway Git repositories and dependency doubles; they verify orchestration and checker selection, not zsh/tmux/jq themselves. An actual dotfiles gate run still requires those tools. Scratch directories are created outside the checkout in `/tmp` and removed by the tests.
+- The contract tests use throwaway Git repositories; scratch directories are created outside the checkout in `/tmp` and removed by the tests.
 
 ## Node runner (#2)
 
@@ -120,12 +98,12 @@ commands run from the target root and may use `{repo}`, `{base_commit}`,
 `{run_dir}`, `{spec_dir}` and `{feedback_file}`.
 
 ```json
-{"factory": "dotfiles-v1", "max_retries": 2,
+{"factory": "example", "max_retries": 2,
  "protected_paths": ["odd/runs/", ".factory/", "gates/"],
  "nodes": [
   {"id": "implement", "kind": "agent", "prompt_file": "prompts/implement.md",
    "tools": ["Read", "Edit", "Write", "Bash"], "max_turns": 30, "max_budget_usd": 3.0, "timeout_seconds": 1800},
-  {"id": "verify", "kind": "code", "command": ["bash", "gates/gates.sh", "{repo}", "{base_commit}"],
+  {"id": "verify", "kind": "code", "command": ["bash", "-c", "make test"],
    "read_only": true, "retry": "implement", "timeout_seconds": 600}
  ]}
 ```
