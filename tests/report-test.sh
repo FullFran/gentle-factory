@@ -80,7 +80,7 @@ add_receipt implement 2 success completed 0.25 ""
 printf 'noise\nPR: https://github.com/FullFran/dotfiles/pull/60\n' >"$runs/r1/logs/output-1.log"
 report
 check "complete: exit 0 and REPORT line" '[ "$code" = 0 ] && grep -q "^REPORT: status=posted state=complete issue=FullFran/dotfiles#55$" <<<"$out"'
-check "complete: one comment with the hidden marker" '[ "$(count_posts)" = 1 ] && grep -qF "<!-- factory-report:v1 run=r1 state=complete -->" <<<"$(posted)"'
+check "complete: one comment with the hidden marker" '[ "$(count_posts)" = 1 ] && grep -qF "<!-- factory-report:v1 run=r1 receipt=3 state=complete -->" <<<"$(posted)"'
 check "complete: PR link, attempts and cost are present" 'grep -q "pull/60" <<<"$(posted)" && grep -q "Attempts: 3" <<<"$(posted)" && grep -q "1.00" <<<"$(posted)"'
 check "complete: factory:ready is removed, nothing added" \
   'grep -q "^issue edit 55 .*--remove-label factory:ready" "$FAKE_GH_DIR/calls" && ! grep -q "add-label" "$FAKE_GH_DIR/calls"'
@@ -111,6 +111,19 @@ check "decision: notify command ran once with the message on stdin and no argume
   '[ "$(grep -c "^ARGS: 0" "$NOTIFY_LOG")" = 1 ] && grep -q "needs_decision" "$NOTIFY_LOG" && grep -q "FullFran/dotfiles#55" "$NOTIFY_LOG"'
 check "decision: no absolute path in the comment or the notification" \
   '! grep -q "/home/" <<<"$(posted)" && ! grep -q "/home/" "$NOTIFY_LOG"'
+: >"$FAKE_GH_DIR/calls"; : >"$NOTIFY_LOG"
+report
+check "decision: re-report posts nothing, changes no label and does not notify again" \
+  '[ "$code" = 0 ] && grep -q "^REPORT: status=already-posted state=needs_decision" <<<"$out" && [ "$(count_posts)" = 1 ] && ! grep -q "issue comment\|issue edit\|label create" "$FAKE_GH_DIR/calls" && [ ! -s "$NOTIFY_LOG" ]'
+
+# --- resumed run that stops on a new question ---------------------------------
+add_receipt implement 1 needs_decision user_decision_required 0.25 $'reason: keep the old flag or drop it?'
+: >"$FAKE_GH_DIR/calls"; : >"$NOTIFY_LOG"
+report
+check "resumed: a new needs_decision receipt in the same run posts its own comment and notifies once" \
+  '[ "$code" = 0 ] && grep -q "^REPORT: status=posted state=needs_decision" <<<"$out" && [ "$(count_posts)" = 2 ] && grep -q "drop it?" "$FAKE_GH_DIR/posted-1.md" && [ "$(grep -c "^ARGS: 0" "$NOTIFY_LOG")" = 1 ]'
+report
+check "resumed: re-reporting it still posts nothing" '[ "$code" = 0 ] && grep -q "status=already-posted" <<<"$out" && [ "$(count_posts)" = 2 ]'
 unset FACTORY_NOTIFY_CMD
 
 # --- stopped ----------------------------------------------------------------
@@ -125,6 +138,10 @@ check "stopped: no absolute path, command or receipt content in the comment" \
 check "stopped: factory:ready removed, needs-decision not added" \
   'grep -q "remove-label factory:ready" "$FAKE_GH_DIR/calls" && ! grep -q "needs-decision" "$FAKE_GH_DIR/calls"'
 check "no FACTORY_NOTIFY_CMD: report still succeeds" '[ "$code" = 0 ]'
+: >"$FAKE_GH_DIR/calls"
+report
+check "stopped: re-report posts nothing and changes no label" \
+  '[ "$code" = 0 ] && grep -q "^REPORT: status=already-posted state=stopped" <<<"$out" && [ "$(count_posts)" = 1 ] && ! grep -q "issue comment\|issue edit" "$FAKE_GH_DIR/calls"'
 
 # --- misconfiguration ---------------------------------------------------------
 report "$scratch/missing.json"

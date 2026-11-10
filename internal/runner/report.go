@@ -46,8 +46,10 @@ type runReport struct {
 	costUSD                                           float64
 }
 
+// marker identifies the receipt that ended the run, so re-reporting it is a no-op while a
+// resumed run that ends again (a new terminal receipt) gets its own comment.
 func (r *runReport) marker() string {
-	return fmt.Sprintf("<!-- factory-report:v1 run=%s state=%s -->", r.runID, r.state)
+	return fmt.Sprintf("<!-- factory-report:v1 run=%s receipt=%d state=%s -->", r.runID, r.attempts, r.state)
 }
 
 func (r *runReport) body() string {
