@@ -1,6 +1,6 @@
 # gentle-factory
 
-A software factory built from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) pieces, packaged as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A human designs the work in an issue; once the design is marked ready, the factory runs alone up to a draft PR. A concrete factory (for example, issue to draft PR for one repository) is a layer of those packages, assembled and run by the [metaharness](https://github.com/FullFran/metaharness), whose `factories/` folder composes factories like this one.
+A software factory built from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) pieces, packaged as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A human designs the work in an issue; once the design is marked ready, the factory runs alone up to a draft PR. The factory knows no repository: it is a harness plus input (a designed issue), output (a draft PR) and observability. Everything specific to a repository comes from the issue's design and from the repository itself, read at run time. It is assembled and run by the [metaharness](https://github.com/FullFran/metaharness).
 
 The long-term goal is to list it on gentlehub so the gentle-ai community can use it.
 
@@ -23,7 +23,7 @@ This repository is an HCS catalog root in the metaharness layout, composed with 
 |---|---|
 | `catalog/` | generated HCS-0001 catalog |
 | `packages/` | one folder per package (node, run adapter, gate) |
-| `layers/` | one layer per concrete factory |
+| `pipeline/` | the one repository-agnostic pipeline: spec, prompts and code nodes |
 
 ## Dotfiles v1 gates (S4)
 
@@ -111,7 +111,7 @@ bin/factory run --spec factory.json --repo /path/to/target --context context.jso
 bin/factory run ... --run-id <id>        # resume: completed nodes are skipped
 bin/factory summary --repo /path/to/target [--json]
 bash tests/runner-test.sh                # builds the binary, uses claude and gh doubles, spends nothing
-bash tests/layer-bifrost-test.sh         # the bifrost layer's nodes, with doubles
+bash tests/pipeline-test.sh              # the pipeline's code nodes, with doubles
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -199,15 +199,24 @@ Not yet: Orca transport and the pi, codex and agy adapters (#2 scope comment), t
 stale-output reaper and stuck guard from the node contract §4.3, and the design's
 `gate_level`, `budget_cap_usd`, `turn_cap` and `timeout_seconds` (accepted, not yet applied).
 
-## Bifrost layer (#3)
+## Pipeline (#3)
 
-`layers/bifrost/` turns a designed FullFran/bifrost issue into a draft PR:
-`plan` (read-only) → `implement` (gets the plan) → `tests` (`node --test pi/bifrost.test.mjs`,
-`go test ./...` and the design's `done_when`) → `review` (read-only, a separate claude with
-the rubric built from merged bifrost PRs; `FALLO:` sends the change back) → `output`
-(pushes `factory/<issue>` and opens a **draft** PR with the run's telemetry). Merge waits for Fran.
+`pipeline/` is the same for every repository (decision in #1: no per-repository layers):
+`plan` (read-only) → `implement` (gets the plan) → `tests` (runs the design's `done_when`) →
+`review` (read-only, a separate claude; `FALLO:` sends the change back) → `output` (pushes
+`factory/<issue>` and opens a **draft** PR with the run's telemetry). Merge waits for Fran.
+
+Where repository knowledge comes from:
+
+- **The design comment:** `done_when` lists every check that proves the issue done, including
+  the repository's own test commands; `expected_files` bounds the edits.
+- **The repository, at run time:** the planner, implementer and reviewer read its agent and
+  contributor instructions (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`), its CI and scripts,
+  and the reviewer judges against the last merged changes in its history.
 
 ```bash
-bin/factory collect --repo FullFran/bifrost --issue N --checkout "$co" --out "$ctx"
-bin/factory run --spec layers/bifrost/factory.json --repo "$co" --context "$ctx/context.json"
+bin/factory collect --repo OWNER/NAME --issue N --checkout "$co" --out "$ctx"
+bin/factory run --spec pipeline/factory.json --repo "$co" --context "$ctx/context.json"
 ```
+
+Not yet (#14): `factory start` cloning into a work directory, running, and deleting the clone.
