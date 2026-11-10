@@ -27,8 +27,10 @@ Usage:
       (default ${XDG_CACHE_HOME:-$HOME/.cache}/gentle-factory/work), collect, run the
       pipeline (default: the one embedded in this binary; --spec overrides it), copy
       the run's receipts to the archive (default ${XDG_DATA_HOME:-$HOME/.local/share}/
-      gentle-factory/runs/<run_id>) and delete the clone unless --keep. Stops before
-      running when factory/N already exists on origin. Last line:
+      gentle-factory/runs/<run_id>) and delete the clone unless --keep. An existing
+      factory/N on origin is kept, renamed to factory/N-<run_id>, and the run starts
+      from a fresh factory/N; it stops before running when an open PR uses factory/N.
+      Last line:
       START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=... run=ID archive=DIR
   factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
       List open issues labelled factory:ready and start each one like "start" (up to
