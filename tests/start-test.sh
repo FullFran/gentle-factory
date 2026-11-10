@@ -56,7 +56,11 @@ case "$1 $2" in
   "api repos/"*)
     IFS=/ read -r _ owner name _ n _ <<<"$2"
     cat "$FAKE_GH_DIR/comments-$owner+$name-$n.json" ;;
-  "pr list") case " $* " in *" --head "*) ;; *) cat "$FAKE_GH_DIR/prs-$key.json" 2>/dev/null || echo '[]' ;; esac ;;
+  "pr list") case " $* " in
+      *" --head "*) head=""; prev=""; for a in "$@"; do [ "$prev" = --head ] && head="$a"; prev="$a"; done
+        cat "$FAKE_GH_DIR/prs-head-$key-${head//\//+}.json" 2>/dev/null || true ;;
+      *) cat "$FAKE_GH_DIR/prs-$key.json" 2>/dev/null || echo '[]' ;;
+    esac ;;
   "issue comment") for a in "$@"; do [ "$prev2" = --body-file ] && cat "$a" >>"$FAKE_GH_DIR/report-bodies"; prev2="$a"; done ;;
   "issue edit"|"label create") ;;
   "pr create") echo "https://github.com/$repo/pull/99" ;;
@@ -133,15 +137,38 @@ check "start: a not-ready issue exits 1 with NOT_READY and runs nothing" \
   '[ "$code" = 1 ] && grep -qE "^START: status=NOT_READY issue=FullFran/bifrost#8 run=- archive=-\$" <<<"$out" && [ ! -s "$FAKE_LOG" ]'
 check "start: a not-ready issue leaves nothing under the work root" 'empty_dir "$work"'
 
+# A design edit after a stop: the previous attempt pushed factory/9, no PR is open on it.
 mk_issue FullFran/bifrost 9 factory:ready "test -f impl.txt"
-git -C "$FAKE_GH_DIR/origins/FullFran+bifrost.git" branch factory/9 main
-before="$(git -C "$FAKE_GH_DIR/origins/FullFran+bifrost.git" rev-parse factory/9)"
+o9="$FAKE_GH_DIR/origins/FullFran+bifrost.git"
+git clone -q "$o9" "$scratch/prev9" && git -C "$scratch/prev9" checkout -qb factory/9
+echo old >"$scratch/prev9/impl.txt"
+git -C "$scratch/prev9" add -A && git -C "$scratch/prev9" -c user.name=t -c user.email=t@t \
+  commit -qm "chore(factory): implement attempt 1 (run_0000aaaa-0000-4000-8000-000000000009)"
+git -C "$scratch/prev9" push -q origin factory/9
+before="$(git -C "$o9" rev-parse factory/9)"
+jq -n '[{url: "https://github.com/FullFran/bifrost/pull/98"}]' >"$FAKE_GH_DIR/prs-head-FullFran+bifrost-factory+9.json"
 : >"$FAKE_LOG"
 out="$("$factory" start FullFran/bifrost#9 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
-check "start: an existing remote factory/9 stops before running (exit 1, STOPPED, says why)" \
-  '[ "$code" = 1 ] && grep -q "factory/9 already exists on origin" <<<"$out" && grep -qE "^START: status=STOPPED issue=FullFran/bifrost#9 run=- " <<<"$out" && [ ! -s "$FAKE_LOG" ]'
-check "start: the existing remote branch is untouched and the work root is clean" \
-  '[ "$(git -C "$FAKE_GH_DIR/origins/FullFran+bifrost.git" rev-parse factory/9)" = "$before" ] && empty_dir "$work"'
+check "start: factory/9 with an open PR stops before running (exit 1, STOPPED, names the PR)" \
+  '[ "$code" = 1 ] && grep -q "factory/9 has an open pull request https://github.com/FullFran/bifrost/pull/98" <<<"$out" && grep -qE "^START: status=STOPPED issue=FullFran/bifrost#9 run=- " <<<"$out" && [ ! -s "$FAKE_LOG" ]'
+check "start: a branch with an open PR is untouched and the work root is clean" \
+  '[ "$(git -C "$o9" rev-parse factory/9)" = "$before" ] && [ "$(git -C "$o9" for-each-ref --count=2 "refs/heads/factory/9-*" | wc -l)" = 0 ] && empty_dir "$work"'
+rm "$FAKE_GH_DIR/prs-head-FullFran+bifrost-factory+9.json"
+out="$("$factory" start FullFran/bifrost#9 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
+check "start: a stale factory/9 (no open PR) does not block a new run" \
+  '[ "$code" = 0 ] && grep -qE "^START: status=COMPLETE issue=FullFran/bifrost#9 run=run_" <<<"$out" && [ "$(starts)" = 1 ]'
+check "start: the previous factory/9 is kept on origin under its run-scoped name and said so" \
+  '[ "$(git -C "$o9" rev-parse factory/9-run_0000aaaa-0000-4000-8000-000000000009)" = "$before" ] && grep -q "START: kept factory/9 as factory/9-run_0000aaaa-0000-4000-8000-000000000009" <<<"$out"'
+check "start: the new run starts from a fresh factory/9 (base, not the old attempt)" \
+  'run9="$(sed -n "s/^START: status=COMPLETE .* run=\([^ ]*\) .*/\1/p" <<<"$out")" && ! git -C "$o9" rev-parse --verify -q factory/9 >/dev/null &&
+   [ "$(jq -rs "map(.predicate.references.vcs.base_commit) | unique | join(\" \")" "$arch/$run9"/receipts/*.json)" = "$(git -C "$o9" rev-parse main)" ]'
+check "start: after the new run nothing remains under the work root" 'empty_dir "$work"'
+# Without a factory commit naming its run, the kept name falls back to the tip commit.
+git -C "$o9" branch factory/9 main
+tip="$(git -C "$o9" rev-parse --short=12 main)"
+out="$("$factory" start FullFran/bifrost#9 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
+check "start: a stale branch with no run id is kept as factory/9-<tip>" \
+  '[ "$code" = 0 ] && [ "$(git -C "$o9" rev-parse factory/9-$tip)" = "$(git -C "$o9" rev-parse main)" ] && empty_dir "$work"'
 
 out="$("$factory" start FullFran/bifrost --work-root "$work" 2>&1)"; code=$?
 check "start: a malformed target is MISCONFIGURED (exit 2)" '[ "$code" = 2 ] && grep -qE "^START: status=MISCONFIGURED " <<<"$out"'

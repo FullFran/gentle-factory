@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -160,6 +161,51 @@ func copyTree(src, dst string) error {
 	})
 }
 
+var factoryRunRe = regexp.MustCompile(`^chore\(factory\): .* \((run_[0-9a-f-]+)\)$`)
+
+// keepStaleBranch frees branch on origin for a new run (#14): the previous attempt is
+// renamed, atomically, to a run-scoped name and never deleted. A branch with an open
+// pull request is left alone; why then says so and nothing changes.
+func keepStaleBranch(repo, clone, branch string) (kept, why string, err error) {
+	raw, err := gh("pr", "list", "-R", repo, "--head", branch, "--state", "open", "--json", "url")
+	if err != nil {
+		return "", "", err
+	}
+	var prs []struct {
+		URL string `json:"url"`
+	}
+	if s := strings.TrimSpace(string(raw)); s != "" {
+		if err := json.Unmarshal([]byte(s), &prs); err != nil {
+			return "", "", specErr("cannot read pull request JSON: %v", err)
+		}
+	}
+	if len(prs) > 0 {
+		return "", fmt.Sprintf("branch %s has an open pull request %s; merge or close it to start again (nothing was run or changed)", branch, prs[0].URL), nil
+	}
+	tracking := "refs/remotes/origin/" + branch
+	tip, err := git(clone, "rev-parse", "--verify", tracking)
+	if err != nil {
+		return "", "", err
+	}
+	tip = strings.TrimSpace(tip)
+	// The run that pushed it names its factory commits; without one, the tip names it.
+	suffix := tip[:12]
+	if log, err := git(clone, "log", "--format=%s", tracking); err == nil {
+		for _, subject := range strings.Split(log, "\n") {
+			if m := factoryRunRe.FindStringSubmatch(subject); m != nil {
+				suffix = m[1]
+				break
+			}
+		}
+	}
+	kept = branch + "-" + suffix
+	if _, err := git(clone, "push", "-q", "--atomic", "--force-with-lease=refs/heads/"+branch+":"+tip, "origin",
+		tip+":refs/heads/"+kept, ":refs/heads/"+branch); err != nil {
+		return "", "", err
+	}
+	return kept, "", nil
+}
+
 // startIssue clones repo, collects issue, runs the pipeline, archives the receipts and
 // deletes the clone. Whatever happens after the clone, the receipts are archived first.
 func startIssue(repo string, issue int, o startOpts, out io.Writer) (res startResult) {
@@ -206,7 +252,14 @@ func startIssue(repo string, issue int, o startOpts, out io.Writer) (res startRe
 		return fail(startMisconfigured, "%v", err)
 	}
 	if strings.TrimSpace(remote) != "" {
-		return fail(startStopped, "branch %s already exists on origin; delete it to start again (nothing was run or changed)", branch)
+		kept, why, err := keepStaleBranch(repo, clone, branch)
+		if err != nil {
+			return fail(startMisconfigured, "%v", err)
+		}
+		if why != "" {
+			return fail(startStopped, "%s", why)
+		}
+		fmt.Fprintf(out, "START: kept %s as %s on origin\n", branch, kept)
 	}
 
 	spec := o.spec

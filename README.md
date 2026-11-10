@@ -269,8 +269,13 @@ bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N
 1. Lock the issue (a second run of the same issue is refused) and `gh repo clone` the
    repository into a fresh directory under the work root
    (default `${XDG_CACHE_HOME:-$HOME/.cache}/gentle-factory/work`).
-2. Stop, without running or changing anything, if `factory/N` already exists on origin.
-   Delete that branch yourself to run again after a design edit.
+2. If `factory/N` already exists on origin (a previous attempt, for example one that
+   stopped before a design edit), keep it: it is renamed on origin, in one atomic push,
+   to a run-scoped `factory/N-<run_id>` (the run named by its `chore(factory)` commits,
+   or `factory/N-<tip sha>` when none does), and the new run starts from a fresh
+   `factory/N`. Nothing is deleted, and the rename is printed as
+   `START: kept factory/N as factory/N-<id> on origin`. If an open pull request uses
+   `factory/N`, stop without running or changing anything; merge or close it first.
 3. `collect`, then `run` the pipeline. By default it is the `pipeline/` embedded in the
    binary, so an installed `factory` needs no checkout of this repository; `--spec FILE`
    uses another spec instead.
