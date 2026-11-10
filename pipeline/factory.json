@@ -12,9 +12,7 @@
     "Read",
     "Grep",
     "Glob",
-    "Bash(git log:*)",
-    "Bash(git show:*)",
-    "Bash(ls:*)"
+    "Bash"
    ],
    "max_turns": 25,
    "max_budget_usd": 1.5,
@@ -64,10 +62,7 @@
     "Read",
     "Grep",
     "Glob",
-    "Bash(git diff:*)",
-    "Bash(git log:*)",
-    "Bash(git show:*)",
-    "Bash(ls:*)"
+    "Bash"
    ],
    "max_turns": 30,
    "max_budget_usd": 2,
