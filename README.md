@@ -200,8 +200,40 @@ Derives the terminal state of a run from its receipts (the last receipt decides)
 
 The comment is deliberately minimal because target repositories can be public: it never includes receipts,
 logs, commands or absolute paths (paths in quoted text become `<path>`, text is capped). Run artifacts stay in
-the receipt store until the factory panel exists. Output is `REPORT: status=posted|already-posted state=...
+the receipt store, where `factory panel` shows them. Output is `REPORT: status=posted|already-posted state=...
 issue=OWNER/NAME#N`; exit `0` on success, `2` on missing receipts or context. Test: `bash tests/report-test.sh`.
+
+### Factory panel (#15)
+
+```bash
+factory panel [--addr 127.0.0.1:8787] [--runs-dir DIR ...] [--spec FILE] [--allow-remote]
+```
+
+A local, read-only web UI and JSON API over one or more receipt stores (`--runs-dir` repeats; the default is
+the archive `factory start` copies runs to, `${XDG_DATA_HOME:-$HOME/.local/share}/gentle-factory/runs`). The
+first line it prints is `PANEL: url=http://HOST:PORT/` (`--addr 127.0.0.1:0` picks a free port).
+
+- **Runs:** repository#issue, run id, status, last node, cost, duration, attempts and last update, refreshed
+  every few seconds. Status comes from the receipts with the runner's own stop rules: `complete` (the last
+  spec node succeeded), `needs_decision`, `stopped` (a failure the runner does not retry: no retry edge, a
+  guard, the same failure signature twice, or retries exhausted) and `running` (no terminal state yet). A
+  running run with no file change for longer than the longest node timeout is flagged `silent`: its runner
+  may have died.
+- **Run view:** an SVG graph of the spec (`--spec`, default the pipeline embedded in the binary): one box
+  per node with its attempts as numbered chips colored by status, the last node outlined, and the retry
+  edges (`tests`/`review` → `implement`) solid and counted when they happened. Clicking an attempt shows its
+  receipt (status, reason, tokens, cost, turns, model, duration, commits, trace), the node's output
+  (`outputs/<node>.md`, the last successful answer), its log and the feedback that sent it back.
+- **Decisions:** every run parked on a `DECISION:` question, oldest first, with its issue and age, so the
+  owner does not have to find them in GitHub notifications.
+- **Nodes:** the `factory summary` numbers (attempts, failures, decisions, retries, cost, duration) per node
+  across every runs dir shown; the same totals head the runs list and each run.
+
+API: `GET /api/runs`, `/api/runs/{dir}/{run_id}`, `/api/runs/{dir}/{run_id}/attempts/{node}/{attempt}` and
+`/api/decisions` (`{dir}` is the index of the `--runs-dir`). The panel only reads: it never writes to a
+runs dir. It binds loopback; any other address (including `:8787`, every interface) exits `2` unless
+`--allow-remote`, because logs and notes hold machine paths. The UI is static HTML, CSS and JavaScript
+embedded in the binary: no build step, no CDN. Test: `bash tests/panel-test.sh`.
 
 ## Pipeline (#3)
 
