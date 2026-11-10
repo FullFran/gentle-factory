@@ -374,7 +374,8 @@
         },
         "failure_signature": {
           "type": "string",
-          "description": "Deterministic fingerprint (e.g. sha256 or normalized error token) used by runner to bound identical failure retries."
+          "description": "Deterministic fingerprint (e.g. sha256 or normalized error token) used by runner to bound identical failure retries.",
+          "minLength": 1
         },
         "materials": {
           "type": "array",
@@ -426,7 +427,96 @@
           "type": "string",
           "description": "Concise non-identifying operational summary or diagnostic details."
         }
-      }
+      },
+      "allOf": [
+        {
+          "description": "A success outcome cannot carry a failing exit code or a non-GREEN gate verdict.",
+          "if": {
+            "properties": {
+              "outcome": {
+                "properties": {
+                  "status": {
+                    "const": "success"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "properties": {
+                  "exit_code": {
+                    "const": 0
+                  }
+                }
+              },
+              "gate": {
+                "properties": {
+                  "status": {
+                    "const": "GREEN"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "Every failure receipt records the failure_signature the identical-failure guard compares.",
+          "if": {
+            "properties": {
+              "outcome": {
+                "properties": {
+                  "status": {
+                    "const": "failure"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "failure_signature"
+            ]
+          }
+        },
+        {
+          "description": "Code and agent nodes bind their receipt to the commit they produced or observed, so a later code change makes the receipt stale.",
+          "if": {
+            "properties": {
+              "step": {
+                "properties": {
+                  "node_kind": {
+                    "enum": [
+                      "code",
+                      "agent"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "references"
+            ],
+            "properties": {
+              "references": {
+                "required": [
+                  "vcs"
+                ],
+                "properties": {
+                  "vcs": {
+                    "required": [
+                      "head_commit"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

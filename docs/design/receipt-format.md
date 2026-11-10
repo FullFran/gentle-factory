@@ -81,7 +81,7 @@ The receipt predicate is defined in [schemas/receipt.schema.json](../../schemas/
    - `repository`: Repository in `owner/repo` format.
    - `issue`: `{ "number": <int>, "url": "<uri>" }`.
    - `design_comment`: `{ "id": <int>, "url": "<uri>", "sha256": "<hex>", "updated_at": "<iso8601>" }`.
-   - `vcs`: Git commit hashes (`base_commit`, `head_commit`), branch name, and optional PR reference.
+   - `vcs`: Git commit hashes (`base_commit`, `head_commit`), branch name, and optional PR reference. `code` and `agent` receipts must record `head_commit`: it binds the receipt to the exact code it produced or checked (see node contract §5.2).
 4. **Execution (`execution`)**:
    - `engine`: Runner identity (`claude-code-headless`, `bash`, `github-human-gate`).
    - `engine_version`: Version string of engine.
@@ -95,14 +95,14 @@ The receipt predicate is defined in [schemas/receipt.schema.json](../../schemas/
 6. **Outcome (`outcome`)**:
    - `status`: Enum: `"success"`, `"failure"`, `"needs_decision"`, `"misconfigured"`.
    - `terminal_reason`: Normalized string (e.g., `completed`, `gate_failed`, `max_turns_exceeded`, `human_approved`).
-   - `exit_code`: Numeric process exit code if applicable.
+   - `exit_code`: Numeric process exit code if applicable. A `success` receipt may only carry `exit_code: 0`.
 7. **Gate Verdict (`gate`)**:
-   - `status`: Enum: `"GREEN"`, `"RED"`, `"MISCONFIGURED"`.
+   - `status`: Enum: `"GREEN"`, `"RED"`, `"MISCONFIGURED"`. A `success` receipt may only carry `GREEN`.
    - `verdict_line`: Exact terminal output string (e.g. `FACTORY_GATES: status=GREEN level=standard passed=12 failed=0`).
    - `checks_passed`: Array of passing check names.
    - `checks_failed`: Array of failing check names.
 8. **Failure Signature (`failure_signature`)**:
-   - Deterministic SHA-256 hash or normalized fingerprint of the error. Used by the runner to enforce retry caps: if two consecutive attempts fail with the identical signature, the runner halts and requests human intervention.
+   - Required on every `failure` receipt. Deterministic SHA-256 hash or normalized fingerprint of the error. Used by the runner to enforce retry caps: if two consecutive attempts fail with the identical signature, the runner halts and requests human intervention.
 9. **Materials & Products (`materials`, `products`)**:
    - In-toto compliant list of consumed inputs and generated outputs with cryptographic digests.
 
