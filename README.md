@@ -190,10 +190,13 @@ factory report --runs-dir DIR --run-id ID --context context.json
 
 Derives the terminal state of a run from its receipts (the last receipt decides) and tells the owner:
 
-- **One issue comment** with a hidden `<!-- factory-report:v1 run=ID state=STATE -->` marker: `complete`
+- **One issue comment** with a hidden `<!-- factory-report:v1 run=ID receipt=N state=STATE -->` marker
+  (`N` is the position of the terminal receipt in the run): `complete`
   (with the draft PR link from the output node's `PR: <url>` log line), `needs_decision` (node and the
   `DECISION:` question) or `stopped` (node, terminal reason and reason), plus attempts and total list-price
-  cost. If a comment with the same marker exists, nothing is posted (`REPORT: status=already-posted`).
+  cost. If a comment with the same marker exists, nothing is posted, no label changes and no notification runs
+  (`REPORT: status=already-posted`). A run resumed with `--run-id` that ends again has a new terminal
+  receipt, so it gets its own comment.
 - **Labels:** `needs_decision` removes `factory:ready` and adds `factory:needs-decision` (created when the
   repository lacks it); `complete` and `stopped` remove `factory:ready`.
 - **Notification:** when `FACTORY_NOTIFY_CMD` is set it runs once, split on spaces without a shell, with a
