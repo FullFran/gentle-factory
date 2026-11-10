@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gentle-factory:schema:design-comment:0.1",
+  "title": "gentle-factory Design Comment Frontmatter",
+  "description": "Schema for machine-readable design comment frontmatter block consumed by gentle-factory.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "ready_signal",
+    "done_when",
+    "expected_files"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Version of the design comment format."
+    },
+    "issue": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Issue number this design applies to."
+    },
+    "ready_signal": {
+      "type": "string",
+      "const": "factory:ready",
+      "description": "Label or directive indicating human readiness."
+    },
+    "done_when": {
+      "type": "string",
+      "description": "Machine-checkable shell command, test path, or assertion proving completion."
+    },
+    "expected_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "List of expected file paths or glob patterns permitted for mutation."
+    },
+    "gate_level": {
+      "type": "string",
+      "enum": [
+        "light",
+        "standard",
+        "full"
+      ],
+      "default": "standard",
+      "description": "Depth of gate checks to execute."
+    },
+    "budget_cap_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Optional custom budget cap override for this issue in USD."
+    },
+    "turn_cap": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional custom turn cap override for this issue."
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional outer timeout override in seconds."
+    }
+  }
+}
