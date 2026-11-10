@@ -44,7 +44,7 @@
     },
     "predicateType": {
       "type": "string",
-      "const": "https://gentle-ai.net/spec/receipt/v0.1",
+      "const": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
       "description": "URI identifying the gentle-factory node receipt predicate schema."
     },
     "predicate": {

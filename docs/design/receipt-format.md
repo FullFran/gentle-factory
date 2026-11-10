@@ -24,7 +24,7 @@ When building verifiable software supply chains, continuous delivery pipelines, 
 │  │ in-toto Statement v1.0 (Linux Foundation / CNCF)                 │  │
 │  │   _type: "https://in-toto.io/Statement/v1"                       │  │
 │  │   subject: [ { name: "git:commit", digest: { gitCommit: ... } } ] │  │
-│  │   predicateType: "https://gentle-ai.net/spec/receipt/v0.1"        │  │
+│  │   predicateType: "https://fullfran.com/spec/gentle-factory/receipt/v0.1"        │  │
 │  │  ┌────────────────────────────────────────────────────────────┐  │  │
 │  │  │ gentle-factory Predicate (JSON Schema 2020-12)             │  │  │
 │  │  │   - References (Issue, Design Comment SHA, Commits, PR)    │  │  │
@@ -63,7 +63,7 @@ To avoid synchronization drift, context explosion, and data leakage, receipts **
 |---|---|---|
 | `_type` | `string` | Must be `"https://in-toto.io/Statement/v1"`. |
 | `subject` | `array` | List of target artifacts produced or verified. Each item has `name` (e.g. `git:commit`) and a `digest` object (e.g. `{"gitCommit": "...", "sha256": "..."}`). |
-| `predicateType` | `string` | Must be `"https://gentle-ai.net/spec/receipt/v0.1"`. |
+| `predicateType` | `string` | Must be `"https://fullfran.com/spec/gentle-factory/receipt/v0.1"`. |
 | `predicate` | `object` | The typed receipt payload defined below. |
 
 ### 2.3 Predicate Schema Breakdown
@@ -126,7 +126,7 @@ An agent node executes Claude Code headless to produce a git commit from a desig
       }
     }
   ],
-  "predicateType": "https://gentle-ai.net/spec/receipt/v0.1",
+  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -227,7 +227,7 @@ A deterministic test script validates the working tree and produces a `GREEN` ve
       }
     }
   ],
-  "predicateType": "https://gentle-ai.net/spec/receipt/v0.1",
+  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -299,7 +299,7 @@ A human maintains the design on the issue and applies the `factory:ready` label.
       }
     }
   ],
-  "predicateType": "https://gentle-ai.net/spec/receipt/v0.1",
+  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -351,7 +351,7 @@ When a gate fails, the receipt captures the `RED` verdict and computes a `failur
       }
     }
   ],
-  "predicateType": "https://gentle-ai.net/spec/receipt/v0.1",
+  "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
   "predicate": {
     "version": "0.1.0",
     "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
@@ -442,7 +442,7 @@ When receipts are transmitted across networks, event buses, or Orca orchestratio
         }
       }
     ],
-    "predicateType": "https://gentle-ai.net/spec/receipt/v0.1",
+    "predicateType": "https://fullfran.com/spec/gentle-factory/receipt/v0.1",
     "predicate": {
       "version": "0.1.0",
       "run_id": "run_98f7e2a1-b4c3-4d5e-8f90-1a2b3c4d5e6f",
