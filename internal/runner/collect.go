@@ -136,28 +136,15 @@ func collect(a collectArgs, stdout io.Writer) error {
 		return notReadyf("missing label %s", readyLabel)
 	}
 
-	raw, err = gh("api", fmt.Sprintf("repos/%s/issues/%d/comments", a.repo, a.issue), "--paginate", "--slurp")
+	latest, err := latestDesignComment(a.repo, a.issue)
 	if err != nil {
 		return err
 	}
-	var pages [][]struct {
-		ID        int64  `json:"id"`
-		URL       string `json:"html_url"`
-		UpdatedAt string `json:"updated_at"`
-		Body      string `json:"body"`
-	}
-	if err := json.Unmarshal(raw, &pages); err != nil {
-		return specErr("cannot read comments JSON: %v", err)
-	}
 	var comment *DesignComment
 	var body string
-	for _, page := range pages {
-		for _, c := range page {
-			if designBlockRe.MatchString(c.Body) { // the latest design comment wins
-				comment = &DesignComment{ID: c.ID, URL: c.URL, SHA256: sha256Text(c.Body), UpdatedAt: c.UpdatedAt}
-				body = c.Body
-			}
-		}
+	if latest != nil {
+		comment = &DesignComment{ID: latest.ID, URL: latest.URL, SHA256: sha256Text(latest.Body), UpdatedAt: latest.UpdatedAt}
+		body = latest.Body
 	}
 	if comment == nil {
 		return notReadyf("no comment with a factory-design:v1 block")
@@ -256,4 +243,34 @@ func checkDoneWhenFails(checkout, doneWhen string, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "COLLECT: check=done_when status=RED exit=%d\n", code)
 	return nil
+}
+
+// issueComment is the part of a GitHub issue comment the factory reads.
+type issueComment struct {
+	ID        int64  `json:"id"`
+	URL       string `json:"html_url"`
+	UpdatedAt string `json:"updated_at"`
+	Body      string `json:"body"`
+}
+
+// latestDesignComment returns the issue's latest comment holding a factory-design:v1
+// block (the latest one wins), or nil when there is none.
+func latestDesignComment(repo string, issue int) (*issueComment, error) {
+	raw, err := gh("api", fmt.Sprintf("repos/%s/issues/%d/comments", repo, issue), "--paginate", "--slurp")
+	if err != nil {
+		return nil, err
+	}
+	var pages [][]issueComment
+	if err := json.Unmarshal(raw, &pages); err != nil {
+		return nil, specErr("cannot read comments JSON: %v", err)
+	}
+	var latest *issueComment
+	for _, page := range pages {
+		for i := range page {
+			if designBlockRe.MatchString(page[i].Body) {
+				latest = &page[i]
+			}
+		}
+	}
+	return latest, nil
 }
