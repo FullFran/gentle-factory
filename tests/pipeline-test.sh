@@ -72,6 +72,9 @@ for n in plan review; do
     "jq -e '.nodes[] | select(.id == \"$n\") | .read_only == true and (.tools | index(\"Bash\") != null)' \"\$layer/factory.json\" >/dev/null"
 done
 
+check "pipeline: plan and review get as long as implement (they may run the repository's checks)" \
+  'jq -e "[.nodes[] | select(.id == \"plan\" or .id == \"review\" or .id == \"implement\") | .timeout_seconds] | unique == [1800]" "$layer/factory.json" >/dev/null'
+
 # The pipeline is repository-agnostic: no file in it names a repository or its commands.
 check "pipeline: names no repository or repository-specific command" \
   '! grep -rniE "bifrost|dotfiles|FullFran|node --test|go test|pi/" "$layer"'
