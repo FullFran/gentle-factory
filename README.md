@@ -1,8 +1,10 @@
-# factory
+# gentle-factory
 
-A software factory built as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A concrete factory (for example, issue to draft PR for one repository) is a layer of those packages, assembled and run by the [metaharness](https://github.com/FullFran/metaharness).
+A software factory built from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) pieces, packaged as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A human designs the work in an issue; once the design is marked ready, the factory runs alone up to a draft PR. A concrete factory (for example, issue to draft PR for one repository) is a layer of those packages, assembled and run by the [metaharness](https://github.com/FullFran/metaharness), whose `factories/` folder composes factories like this one.
 
-Design: [#1](https://github.com/FullFran/factory/issues/1) (moved from FullFran/metaharness).
+The long-term goal is to list it on gentlehub so the gentle-ai community can use it.
+
+Design: [#1](https://github.com/FullFran/gentle-factory/issues/1) (moved from FullFran/metaharness).
 
 ## Direction
 
