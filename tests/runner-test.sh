@@ -47,6 +47,7 @@ case "${FAKE_MODE:-edit}" in
   noop) : ;;
   fallo) result=$'lo he intentado\nFALLO: el diseño no dice qué hacer con los symlinks' ;;
   protected) echo "tampered" >>gates/gate.sh ;;
+  ignored) mkdir -p .factory && echo x >.factory/cfg ;;
   receipts) for f in "${FAKE_RUNS:?}"/*/receipts/*.json; do echo ' ' >>"$f"; done; echo x >impl.txt ;;
 esac
 jq -n --arg r "$result" '{type:"result",subtype:"success",is_error:false,result:$r,num_turns:3,
@@ -214,6 +215,26 @@ FAKE_MODE=receipts FAKE_RUNS="$repo/odd/runs" run "$repo" "$scratch/spec-redo.js
 check "guard: an agent editing receipts fails with protected_path_modified" \
   '[ "$code" = 1 ] && grep -q "node=polish reason=protected_path_modified detail=protected paths changed: odd/runs/" <<<"$out"'
 
+repo="$(new_repo guard-ignored)"
+printf '.factory/\n' >"$repo/.gitignore"
+git -C "$repo" add .gitignore && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm ignore
+FAKE_MODE=ignored run "$repo" "$scratch/spec.json"
+check "guard: an agent writing a gitignored protected path still fails" \
+  '[ "$code" = 1 ] && grep -q "node=implement reason=protected_path_modified detail=protected paths changed: .factory/, .factory/cfg" <<<"$out"'
+cat >"$scratch/spec-ro-retry.json" <<EOF
+{"factory": "test", "nodes": [
+  {"id": "implement", "kind": "agent", "prompt_file": "implement.md", "tools": ["Edit"]},
+  {"id": "verify", "kind": "code", "command": ["bash", "-c", "echo artifact > build.out"], "read_only": true, "retry": "implement"}]}
+EOF
+repo="$(new_repo guard-ro-final)"
+run "$repo" "$scratch/spec-ro-retry.json"
+check "guard: a read-only trip is final, not retried into a producer commit" \
+  '[ "$code" = 1 ] && grep -q "node=verify reason=read_only_modified" <<<"$out" && ! grep -q "RETRY:" <<<"$out" && ! git -C "$repo" log --format=%H -1 -- build.out | grep -q .'
+run_id="$(receipt "$repo" 1 | jq -r .run_id)"
+run "$repo" "$scratch/spec-ro-retry.json" --run-id "$run_id"
+check "guard: resuming after a read-only trip stops again without running anything" \
+  '[ "$code" = 1 ] && grep -q "node=verify reason=read_only_modified" <<<"$out" && ! grep -q "NODE:" <<<"$out"'
+
 # --- bounded return loop ---------------------------------------------------
 
 repo="$(new_repo retry-ok)"
@@ -271,6 +292,12 @@ check "summary: names the step that fails, retries and costs the most" \
 echo '{"factory": "test", "nodes": [{"id": "x", "kind": "code", "command": ["true"], "retry": "nope"}]}' >"$scratch/bad.json"
 run "$(new_repo bad)" "$scratch/bad.json"
 check "spec: an invalid spec exits 2 with MISCONFIGURED" '[ "$code" = 2 ] && grep -q "RUN: status=MISCONFIGURED" <<<"$out"'
+run "$(new_repo bad-id)" "$scratch/spec.json" --run-id ..
+check "spec: run id .. is rejected" '[ "$code" = 2 ] && grep -q "run id must match" <<<"$out"'
+repo="$(new_repo dirty)"
+echo wip >>"$repo/README.md"
+run "$repo" "$scratch/spec.json"
+check "spec: a new run refuses a dirty target tree" '[ "$code" = 2 ] && grep -q "uncommitted changes" <<<"$out"'
 check "portability: no laptop paths in the runner" '! grep -nE "/home/|/Users/|~/" "$runner"'
 
 printf 'RESULT: passed=%s failed=%s\n' "$pass" "$fail"

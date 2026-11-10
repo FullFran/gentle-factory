@@ -36,6 +36,8 @@ READ_ONLY_DENIED = ["Edit", "Write", "NotebookEdit", "Bash(git commit:*)"]
 FAIL_PREFIX = "FALLO:"
 VERDICT_RE = re.compile(r"^FACTORY_GATES:.*(?:^|\s)status=(GREEN|RED|MISCONFIGURED)(?:\s|$)")
 EXIT_OK, EXIT_STOPPED, EXIT_USAGE = 0, 1, 2
+# A guard trip is final: retrying would let the next producer commit the violation.
+GUARD_REASONS = ("read_only_modified", "protected_path_modified")
 
 
 class SpecError(Exception):
@@ -72,22 +74,42 @@ def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def tree_digest(path):
-    """Digest of every file name and content under path (empty when absent)."""
-    digest = hashlib.sha256()
-    if not os.path.isdir(path):
-        return digest.hexdigest()
-    for root, dirs, files in os.walk(path):
-        dirs.sort()
-        for name in sorted(files):
-            full = os.path.join(root, name)
-            digest.update(os.path.relpath(full, path).encode("utf-8") + b"\0")
-            try:
-                with open(full, "rb") as handle:
-                    digest.update(hashlib.sha256(handle.read()).digest())
-            except OSError:
-                digest.update(b"unreadable")
-    return digest.hexdigest()
+def path_digests(root, rel_paths):
+    """Map of every file, symlink and directory under root/<rel> to a content digest.
+
+    Read from the filesystem, not git, so ignored and untracked files count too.
+    """
+    out = {}
+    for rel in rel_paths:
+        top = os.path.join(root, rel)
+        if os.path.islink(top) or os.path.isfile(top):
+            out[rel] = entry_digest(top)
+            continue
+        if not os.path.isdir(top):
+            continue
+        out[rel + "/"] = "dir"
+        for base, dirs, files in os.walk(top):
+            for name in dirs + files:
+                full = os.path.join(base, name)
+                key = os.path.relpath(full, root)
+                out[key + "/" if os.path.isdir(full) and not os.path.islink(full) else key] = entry_digest(full)
+    return out
+
+
+def entry_digest(path):
+    if os.path.islink(path):
+        return "link:" + os.readlink(path)
+    if os.path.isdir(path):
+        return "dir"
+    try:
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        return "unreadable"
+
+
+def changed_entries(before, after):
+    return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
 
 
 # ---------------------------------------------------------------- spec
@@ -146,7 +168,7 @@ def load_spec(path):
                 raise SpecError(f"node {node_id}: retry target {retry} must be a producer")
         seen.append(node_id)
     spec["max_retries"] = max_retries
-    spec.setdefault("protected_paths", DEFAULT_PROTECTED)
+    spec["protected_paths"] = normalize_protected(spec.get("protected_paths", DEFAULT_PROTECTED))
     spec["_dir"] = spec_dir
     return spec
 
@@ -176,6 +198,7 @@ class Store:
 
     def append(self, receipt):
         rdir = os.path.join(self.run_dir, "receipts")
+        os.makedirs(rdir, exist_ok=True)
         seq = len(os.listdir(rdir)) + 1
         step = receipt["predicate"]["step"]
         path = os.path.join(rdir, f"{seq:04d}-{step['node_id']}-{step['attempt']}.json")
@@ -187,9 +210,11 @@ class Store:
         return path
 
     def log_path(self, node_id, attempt):
+        os.makedirs(os.path.join(self.run_dir, "logs"), exist_ok=True)
         return os.path.join(self.run_dir, "logs", f"{node_id}-{attempt}.log")
 
     def feedback_path(self, node_id):
+        os.makedirs(os.path.join(self.run_dir, "feedback"), exist_ok=True)
         return os.path.join(self.run_dir, "feedback", f"{node_id}.txt")
 
 
@@ -452,20 +477,17 @@ def repo_state(repo):
     return (head_commit(repo), status, sha256_text(diff), blob.hexdigest())
 
 
-def changed_paths(repo, since_head, untracked_before):
-    tracked = git(repo, "diff", "--name-only", since_head).splitlines()
-    untracked = set(git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
-    return set(tracked) | (untracked - set(untracked_before))
-
-
-def protected_hits(paths, protected):
-    hits = []
-    for path in sorted(paths):
-        for prefix in protected:
-            if path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/"):
-                hits.append(path)
-                break
-    return hits
+def normalize_protected(entries):
+    out = []
+    for entry in entries:
+        entry = str(entry).strip()
+        while entry.startswith("./"):
+            entry = entry[2:]
+        entry = entry.strip("/")
+        if not entry or entry.startswith("..") or os.path.isabs(entry):
+            raise SpecError(f"protected path {entry!r} must be relative to the repository")
+        out.append(entry)
+    return out
 
 
 def commit_producer_changes(repo, ctx, node, attempt):
@@ -542,8 +564,8 @@ def execute(node, ctx, store, receipts, feedback):
             handle.write(feedback + "\n")
     repo = ctx["repo"]
     before = repo_state(repo)
-    untracked_before = git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
-    runs_before = tree_digest(store.runs_dir)
+    protected_before = path_digests(repo, ctx["protected"])
+    store_before = path_digests(store.runs_dir, [""])
     print(f"NODE: id={node['id']} attempt={attempt} kind={node['kind']}", flush=True)
     if node["kind"] == "agent":
         outcome = run_agent(node, ctx, attempt, feedback, feedback_file)
@@ -559,9 +581,9 @@ def execute(node, ctx, store, receipts, feedback):
         outcome.update(status="failure", terminal_reason="read_only_modified",
                        reason="read-only step changed the target repository (git status/HEAD differ)")
     if node["kind"] == "agent":
-        hits = protected_hits(changed_paths(repo, before[0], untracked_before), ctx["protected"])
-        if tree_digest(store.runs_dir) != runs_before:
-            hits.append(os.path.relpath(store.runs_dir, repo) + "/")
+        hits = changed_entries(protected_before, path_digests(repo, ctx["protected"]))
+        if changed_entries(store_before, path_digests(store.runs_dir, [""])):
+            hits.append(os.path.relpath(store.runs_dir, repo).rstrip("/") + "/")
         if hits:
             outcome.update(status="failure", terminal_reason="protected_path_modified",
                            reason="protected paths changed: " + ", ".join(hits))
@@ -592,11 +614,13 @@ def run_factory(args):
     repo = git(repo, "rev-parse", "--show-toplevel").strip()
     runs_dir = os.path.abspath(args.runs_dir or os.path.join(repo, DEFAULT_RUNS_DIR))
     run_id = args.run_id or f"run_{uuid.uuid4()}"
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
-        raise SpecError("run id must match [A-Za-z0-9_.-]+")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", run_id):
+        raise SpecError("run id must match [A-Za-z0-9][A-Za-z0-9_.-]*")
     exclude_runs_dir(repo, runs_dir)
     store = Store(runs_dir, run_id)
     receipts = store.receipts()
+    if not receipts and git(repo, "status", "--porcelain").strip():
+        raise SpecError("target repository has uncommitted changes; a new run needs a clean tree")
     base = receipts[0]["references"]["vcs"]["base_commit"] if receipts else head_commit(repo)
     trace_id = sha256_text(run_id)[:32]
     ctx = {"factory": spec["factory"], "run_id": run_id, "task_id": task_id, "context": context,
@@ -616,6 +640,9 @@ def run_factory(args):
             return EXIT_OK
         mine = [r for r in receipts if r["step"]["node_id"] == node["id"]]
         last = mine[-1] if mine else None
+        if (last and last["outcome"]["terminal_reason"] in GUARD_REASONS
+                and last["references"]["vcs"]["head_commit"] == head):
+            return stop(node["id"], last["outcome"]["terminal_reason"], reason_of(last))
         if (node.get("retry") and last and last["outcome"]["status"] == "failure"
                 and last["references"]["vcs"]["head_commit"] == head):
             # Resumed after this checker failed on the current code: decide, do not re-run.
@@ -624,7 +651,8 @@ def run_factory(args):
             predicate, outcome = execute(node, ctx, store, receipts, None)
             if outcome["status"] == "success":
                 continue
-            if outcome["status"] != "failure" or not node.get("retry"):
+            if (outcome["status"] != "failure" or not node.get("retry")
+                    or outcome["terminal_reason"] in GUARD_REASONS):
                 return stop(node["id"], outcome["terminal_reason"], reason_of(predicate))
             prior = mine
         reason = reason_of(predicate)

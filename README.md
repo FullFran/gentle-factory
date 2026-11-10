@@ -145,8 +145,12 @@ Behavior:
   `FACTORY_KILL_GRACE` seconds (default 30).
 - **Guards:** a `read_only` node fails with `read_only_modified` if `git status
   --porcelain`, the working diff, untracked files or HEAD changed. An agent node fails
-  with `protected_path_modified` if it changed a protected path or anything in the
-  receipt store. Guards run before the receipt is written.
+  with `protected_path_modified` if any file, symlink or directory under a protected
+  path or the receipt store changed; both are read from the filesystem, so gitignored
+  and untracked files count. Guards run before the receipt is written, and a guard
+  trip is final: it is never retried, and resuming stops again.
+- **Clean start:** a new run refuses a target with uncommitted changes (exit 2), so
+  everything the runner commits comes from the run's own nodes.
 - **The harness closes the node:** leftover edits of a successful producer node are
   committed by the runner, so every receipt binds the exact commit it saw.
 - **Return loop:** when a node with `retry: <producer>` fails, its reason goes to
