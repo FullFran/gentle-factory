@@ -22,6 +22,20 @@ Usage:
       Exit 1 when the issue is not ready.
   factory run --spec SPEC --repo REPO --context CONTEXT [--run-id ID] [--runs-dir DIR]
       Run (or resume, with --run-id) a factory against a target git repository.
+  factory start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]
+      Clone the repository with gh into a fresh directory under the work root
+      (default ${XDG_CACHE_HOME:-$HOME/.cache}/gentle-factory/work), collect, run the
+      pipeline (default: the one embedded in this binary; --spec overrides it), copy
+      the run's receipts to the archive (default ${XDG_DATA_HOME:-$HOME/.local/share}/
+      gentle-factory/runs/<run_id>) and delete the clone unless --keep. Stops before
+      running when factory/N already exists on origin. Last line:
+      START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=... run=ID archive=DIR
+  factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--once]
+      List open issues labelled factory:ready and start each one like "start" (up to
+      --slots per pass, default 1; --interval default 60; also --work-root, --archive,
+      --spec). A design is started once: the sha256 of its comment is kept in
+      <work-root>/watch-state.json and a changed design starts again. Locks keep two
+      watchers, or two runs of one issue, apart. --once does a single pass.
   factory report --runs-dir DIR --run-id ID --context FILE
       Tell the owner how a run ended: post one issue comment (complete with the
       draft PR link, needs_decision with the question, or stopped with the
@@ -54,16 +68,24 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		code, err = cmdCollect(args[1:], stdout, stderr)
 	case "report":
 		code, err = cmdReport(args[1:], stdout, stderr)
+	case "start":
+		code, err = cmdStart(args[1:], stdout, stderr)
+	case "watch":
+		code, err = cmdWatch(args[1:], stdout, stderr)
 	case "summary":
 		code, err = cmdSummary(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want collect, run, report or summary)", args[0])
+		err = specErr("unknown command %q (want collect, run, start, watch, report or summary)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
 		}
-		fmt.Fprintf(stderr, "RUN: status=MISCONFIGURED reason=%s\n", strings.Join(strings.Fields(err.Error()), " "))
+		label := "RUN"
+		if args[0] == "start" || args[0] == "watch" {
+			label = strings.ToUpper(args[0])
+		}
+		fmt.Fprintf(stderr, "%s: status=MISCONFIGURED reason=%s\n", label, strings.Join(strings.Fields(err.Error()), " "))
 		return exitUsage
 	}
 	return code

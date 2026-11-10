@@ -90,6 +90,7 @@ bin/factory run ... --run-id <id>        # resume: completed nodes are skipped
 bin/factory summary --repo /path/to/target [--json]
 bash tests/runner-test.sh                # builds the binary, uses claude and gh doubles, spends nothing
 bash tests/pipeline-test.sh              # the pipeline's code nodes, with doubles
+bash tests/start-test.sh                 # start and watch: clone, run, archive, clean up
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -222,4 +223,38 @@ bin/factory collect --repo OWNER/NAME --issue N --checkout "$co" --out "$ctx"
 bin/factory run --spec pipeline/factory.json --repo "$co" --context "$ctx/context.json"
 ```
 
-Not yet (#14): `factory start` cloning into a work directory, running, and deleting the clone.
+### Start and watch (#14)
+
+`factory start` owns the whole lifecycle of one issue, so nothing is cloned by hand:
+
+```bash
+bin/factory start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]
+bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--once]
+```
+
+1. Lock the issue (a second run of the same issue is refused) and `gh repo clone` the
+   repository into a fresh directory under the work root
+   (default `${XDG_CACHE_HOME:-$HOME/.cache}/gentle-factory/work`).
+2. Stop, without running or changing anything, if `factory/N` already exists on origin.
+   Delete that branch yourself to run again after a design edit.
+3. `collect`, then `run` the pipeline. By default it is the `pipeline/` embedded in the
+   binary, so an installed `factory` needs no checkout of this repository; `--spec FILE`
+   uses another spec instead.
+4. Whatever the outcome, copy `<clone>/odd/runs/<run_id>` to
+   `<archive>/<run_id>` (default `${XDG_DATA_HOME:-$HOME/.local/share}/gentle-factory/runs`),
+   then delete the clone. `--keep` leaves the clone for debugging. If the receipts cannot
+   be archived the clone is kept so they are not lost.
+
+Nothing of a run remains under the work root once it ends. The last line is
+`START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=OWNER/NAME#N run=<id> archive=<dir>`
+(`run=-` and `archive=-` when nothing ran); exit 0 complete, 1 stopped or not ready, 2 misconfigured.
+
+`watch` lists open issues labelled `factory:ready`, in order, and starts each one like
+`start` while slots remain in the pass (`--slots`, default 1; runs are sequential;
+`--interval` defaults to 60 s; `--once` does one pass and exits). The sha256 of the
+design comment started for each issue is kept in `<work-root>/watch-state.json`, so the
+same design never starts twice and an edited design starts again. A `watch.lock` keeps
+two watchers apart. Stop a running watcher with Ctrl-C; it exits between passes. The state file is the only
+thing `watch` leaves in the work root. Locks hold the pid of their owner and are taken over when it is dead.
+
+`bash tests/start-test.sh` covers both with a local bare origin and `gh` and `claude` doubles.
