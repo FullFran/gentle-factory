@@ -46,6 +46,14 @@ Usage:
       logs, commands or absolute paths. Exit 2 on missing receipts or context.
   factory summary [--repo REPO] [--runs-dir DIR] [--json]
       Which node fails, retries or costs the most across runs.
+  factory panel [--addr 127.0.0.1:8787] [--runs-dir DIR ...] [--spec FILE] [--allow-remote]
+      Serve a read-only web panel and JSON API over receipt stores (repeatable
+      --runs-dir, default the archive of "start"): runs with their status, a graph
+      of the pipeline (--spec, default the embedded one) with every attempt and
+      retry, each attempt's receipt, output, log and feedback, and every run parked
+      on an owner decision. Binds loopback only unless --allow-remote, because logs
+      and notes hold machine paths. Never writes to a runs dir. First line:
+      PANEL: url=http://HOST:PORT/
 
 The receipt store defaults to <repo>/odd/runs. Exit codes: 0 complete,
 1 stopped, 2 invalid spec, context, arguments or repository.
@@ -75,15 +83,17 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		code, err = cmdWatch(args[1:], stdout, stderr)
 	case "summary":
 		code, err = cmdSummary(args[1:], stdout, stderr)
+	case "panel":
+		code, err = cmdPanel(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want collect, run, start, watch, report or summary)", args[0])
+		err = specErr("unknown command %q (want collect, run, start, watch, report, summary or panel)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
 		}
 		label := "RUN"
-		if args[0] == "start" || args[0] == "watch" {
+		if args[0] == "start" || args[0] == "watch" || args[0] == "panel" {
 			label = strings.ToUpper(args[0])
 		}
 		fmt.Fprintf(stderr, "%s: status=MISCONFIGURED reason=%s\n", label, strings.Join(strings.Fields(err.Error()), " "))
@@ -117,6 +127,24 @@ type nodeStats struct {
 	Retries    int     `json:"retries"`
 	CostUSD    float64 `json:"cost_usd"`
 	DurationMS int64   `json:"duration_ms"`
+}
+
+// add counts one receipt: the numbers `summary` and the panel report.
+func (s *nodeStats) add(r *Predicate) {
+	s.Attempts++
+	switch r.Outcome.Status {
+	case "failure", "misconfigured":
+		s.Failures++
+	case "needs_decision":
+		s.Decisions++
+	}
+	if r.Step.Attempt > 1 {
+		s.Retries++
+	}
+	if r.Telemetry.TotalCostUSD != nil {
+		s.CostUSD += *r.Telemetry.TotalCostUSD
+	}
+	s.DurationMS += r.Telemetry.DurationMS
 }
 
 func cmdSummary(args []string, stdout, stderr io.Writer) (int, error) {
@@ -156,20 +184,7 @@ func cmdSummary(args []string, stdout, stderr io.Writer) (int, error) {
 				s = &nodeStats{}
 				stats[r.Step.NodeID] = s
 			}
-			s.Attempts++
-			switch r.Outcome.Status {
-			case "failure", "misconfigured":
-				s.Failures++
-			case "needs_decision":
-				s.Decisions++
-			}
-			if r.Step.Attempt > 1 {
-				s.Retries++
-			}
-			if r.Telemetry.TotalCostUSD != nil {
-				s.CostUSD += *r.Telemetry.TotalCostUSD
-			}
-			s.DurationMS += r.Telemetry.DurationMS
+			s.add(r)
 		}
 	}
 	if *asJSON {
