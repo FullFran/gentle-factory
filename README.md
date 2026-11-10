@@ -173,7 +173,7 @@ The runner adds it to `.git/info/exclude`, so it never shows up in `git status` 
 is never committed. Output lines are `NODE: ...`, `RETRY: ...` and one final
 `RUN: status=COMPLETE|STOPPED ...`. Exit codes: `0` complete, `1` stopped, `2` invalid
 spec, context or repository (`RUN: status=MISCONFIGURED`). `summary` prints attempts,
-failures, retries, cost and duration per node across runs, and a
+failures, design decisions, retries, cost and duration per node across runs, and a
 `MOST: failures=<node> retries=<node> cost=<node>` line.
 
 Not yet: Orca transport and the pi, codex and agy adapters (#2 scope comment), the

@@ -113,6 +113,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) (int, error) {
 type nodeStats struct {
 	Attempts   int     `json:"attempts"`
 	Failures   int     `json:"failures"`
+	Decisions  int     `json:"decisions"`
 	Retries    int     `json:"retries"`
 	CostUSD    float64 `json:"cost_usd"`
 	DurationMS int64   `json:"duration_ms"`
@@ -156,8 +157,11 @@ func cmdSummary(args []string, stdout, stderr io.Writer) (int, error) {
 				stats[r.Step.NodeID] = s
 			}
 			s.Attempts++
-			if r.Outcome.Status != "success" {
+			switch r.Outcome.Status {
+			case "failure", "misconfigured":
 				s.Failures++
+			case "needs_decision":
+				s.Decisions++
 			}
 			if r.Step.Attempt > 1 {
 				s.Retries++
@@ -175,10 +179,10 @@ func cmdSummary(args []string, stdout, stderr io.Writer) (int, error) {
 	}
 	ids := sortedKeys(stats)
 	fmt.Fprintf(stdout, "RUNS: %d\n", runs)
-	fmt.Fprintf(stdout, "%-20s %8s %8s %7s %9s %11s\n", "node", "attempts", "failures", "retries", "cost_usd", "duration_ms")
+	fmt.Fprintf(stdout, "%-20s %8s %8s %9s %7s %9s %11s\n", "node", "attempts", "failures", "decisions", "retries", "cost_usd", "duration_ms")
 	for _, id := range ids {
 		s := stats[id]
-		fmt.Fprintf(stdout, "%-20s %8d %8d %7d %9.4f %11d\n", id, s.Attempts, s.Failures, s.Retries, s.CostUSD, s.DurationMS)
+		fmt.Fprintf(stdout, "%-20s %8d %8d %9d %7d %9.4f %11d\n", id, s.Attempts, s.Failures, s.Decisions, s.Retries, s.CostUSD, s.DurationMS)
 	}
 	most := func(value func(*nodeStats) float64) string {
 		best := ""
