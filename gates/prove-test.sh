@@ -23,7 +23,7 @@ finish() {
 }
 fail() { reason=$1; exit 2; }
 usage() {
-  printf 'Usage: %s <base-ref> [--test-path <relative-path>]... -- <test-command> [args...]\nRun from the target repository. Requires a clean committed tree, including no untracked files.\nDefault test paths: test/, tests/, __tests__/, *.test.*, *.spec.*, test_*, *_test.*, spec_*, *_spec.*.\nExit: 0 PROVEN, 1 NOT_PROVEN, 2 MISCONFIGURED.\n' "$0"
+  printf 'Usage: %s <base-ref> [--test-path <relative-path>]... [--fail-code <n>]... -- <test-command> [args...]\nRun from the target repository. Requires a clean committed tree, including no untracked files.\nDefault test paths: test/, tests/, __tests__/, *.test.*, *.spec.*, test_*, *_test.*, spec_*, *_spec.*.\nOnly the declared failure codes (default: 1) prove a regression; any other non-zero exit is a test error, not a proof.\nExit: 0 PROVEN, 1 NOT_PROVEN, 2 MISCONFIGURED.\n' "$0"
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
 trap finish EXIT
@@ -32,10 +32,18 @@ trap 'reason=interrupted; exit 2' INT TERM HUP
 base=$1
 shift
 test_paths=()
+fail_codes=()
 while [[ $# -gt 0 && $1 != -- ]]; do
-  [[ $1 == --test-path && $# -ge 2 && -n $2 ]] || fail invalid-arguments
-  case /$2/ in //*|*/../*|*/./*) fail invalid-test-path ;; esac
-  test_paths+=("${2%/}")
+  [[ $# -ge 2 && -n $2 ]] || fail invalid-arguments
+  case $1 in
+    --test-path)
+      case /$2/ in //*|*/../*|*/./*) fail invalid-test-path ;; esac
+      test_paths+=("${2%/}") ;;
+    --fail-code)
+      [[ $2 =~ ^[0-9]+$ ]] && (( $2 >= 1 && $2 <= 125 && $2 != 77 )) || fail invalid-fail-code
+      fail_codes+=("$((10#$2))") ;;
+    *) fail invalid-arguments ;;
+  esac
   shift 2
 done
 [[ $# -ge 2 && $1 == -- ]] || fail invalid-arguments
@@ -47,8 +55,11 @@ base=$(git rev-parse --verify --end-of-options "$base^{commit}" 2>/dev/null) || 
 head=$(git rev-parse HEAD) || fail invalid-head
 state=$(git status --porcelain --untracked-files=all) || fail status-unavailable
 [[ -z $state ]] || fail working-tree-not-clean
+((${#fail_codes[@]})) || fail_codes=(1)
 non_tests=()
-while IFS= read -r -d '' path; do
+mapfile -d '' -t changed < <(git diff --no-renames --name-only -z "$base" "$head" --)
+wait "$!" || fail diff-unavailable
+for path in "${changed[@]}"; do
   is_test=0
   if ((${#test_paths[@]})); then
     for test_path in "${test_paths[@]}"; do
@@ -60,7 +71,7 @@ while IFS= read -r -d '' path; do
     esac
   fi
   (( is_test )) || non_tests+=(":(literal)$path")
-done < <(git diff --no-renames --name-only -z "$base" "$head" --)
+done
 ((${#non_tests[@]})) || fail no-non-test-change
 # /tmp is deliberate: scratch must not land inside the target via TMPDIR.
 scratch=$(mktemp -d /tmp/gentle-factory-proof.XXXXXX) || fail scratch-unavailable
@@ -77,7 +88,8 @@ case $code in
   77|126|127) reason=test-command-unavailable ;;
   *)
     if (( code >= 128 )); then reason=test-interrupted
-    else result=PROVEN; reason=test-failed-without-change
+    elif [[ " ${fail_codes[*]} " == *" $code "* ]]; then result=PROVEN; reason=test-failed-without-change
+    else reason=test-errored
     fi ;;
 esac
 exit 0
