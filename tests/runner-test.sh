@@ -50,13 +50,17 @@ case "${!mode_var:-${FAKE_MODE:-edit}}" in
   failonce) [ "$FACTORY_ATTEMPT" = 1 ] && result=$'the summary leaks a path\nFALLO: remove the local path from the summary' ;;
   decision) result=$'no sé qué hacer\nDECISION: should the symlink be followed or copied?' ;;
   outside) echo "attempt $FACTORY_ATTEMPT" >impl.txt; echo x >other.txt ;;
+  hang) : ;;
   noop) : ;;
   fallo) result=$'lo he intentado\nFALLO: el diseño no dice qué hacer con los symlinks' ;;
   protected) echo "tampered" >>gates/gate.sh ;;
   ignored) mkdir -p .factory && echo x >.factory/cfg ;;
   receipts) for f in "${FAKE_RUNS:?}"/*/receipts/*.json; do echo ' ' >>"$f"; done; echo x >impl.txt ;;
 esac
-jq -n --arg r "$result" '{type:"result",subtype:"success",is_error:false,result:$r,num_turns:3,
+printf '%s\n' '{"type":"system","subtype":"init"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}]}}'
+if [ "${!mode_var:-${FAKE_MODE:-edit}}" = hang ]; then sleep 30; fi
+jq -cn --arg r "$result" '{type:"result",subtype:"success",is_error:false,result:$r,num_turns:3,
   total_cost_usd:0.25,usage:{input_tokens:0,output_tokens:0},
   modelUsage:{"claude-fake-1":{inputTokens:40,cacheReadInputTokens:50,cacheCreationInputTokens:10,outputTokens:20}}}'
 EOF
@@ -129,7 +133,7 @@ check "success: runner committed the producer edits and receipts bind that commi
   '[ "$(receipt "$repo" 1 | jq -r .references.vcs.head_commit)" = "$(git -C "$repo" rev-parse HEAD)" ] && [ -z "$(git -C "$repo" status --porcelain)" ]'
 check "success: receipt store is not committed" '! git -C "$repo" ls-files | grep -q "^odd/runs"'
 check "success: claude ran headless with json output and caps" \
-  'grep -q "\[-p\] \[--output-format\] \[json\] \[--max-turns\] \[5\] \[--max-budget-usd\] \[0.5\]" "$FAKE_LOG"'
+  'grep -q "\[-p\] \[--output-format\] \[stream-json\] \[--verbose\] \[--max-turns\] \[5\] \[--max-budget-usd\] \[0.5\]" "$FAKE_LOG"'
 check "success: allowlist passed" 'grep -q "\[--allowedTools\] \[Read\] \[Edit\] \[Write\] \[Bash\]" "$FAKE_LOG"'
 check "success: deny list passed" \
   'grep -q "\[--disallowedTools\] \[Bash(git push:\*)\] \[Bash(git tag:\*)\] \[Bash(git reset:\*)\] \[Bash(gh:\*)\]" "$FAKE_LOG"'
@@ -374,6 +378,16 @@ repo="$(new_repo textfix)"
 FAKE_MODE_implement=noop FAKE_MODE_review=failonce run "$repo" "$scratch/textfix.json"
 check "retry: a checker re-runs after a producer retry that left HEAD unchanged" \
   '[ "$code" = 0 ] && grep -q "NODE: id=review attempt=2 kind=agent" <<<"$out" && grep -q "RUN: status=COMPLETE" <<<"$out"'
+
+# A timed-out agent keeps what it did (#30): the stream so far is in the log and the receipt notes.
+cat >"$scratch/hang.json" <<EOF
+{"factory": "test", "nodes": [{"id": "implement", "kind": "agent", "prompt_file": "implement.md", "timeout_seconds": 2}]}
+EOF
+repo="$(new_repo hang)"
+FAKE_MODE=hang run "$repo" "$scratch/hang.json"
+check "timeout: a timed-out agent node stops the run with reason timeout" '[ "$code" = 1 ] && grep -q "reason=timeout" <<<"$out"'
+check "timeout: the node log keeps the agent's stream until the kill" 'grep -q "\"command\":\"npm test\"" "$(find "$repo/odd/runs" -name "implement-1.log")"'
+check "timeout: the receipt notes name the last tool call" '[ "$(receipt "$repo" 1 | jq -r .notes | grep -c "last tool: Bash npm test")" = 1 ]'
 
 # --- collect (factory#3 step 1) -------------------------------------------------
 

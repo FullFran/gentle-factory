@@ -144,7 +144,7 @@ func claudeCommand(node *Node) (cmd, tools []string) {
 	if node.ReadOnly {
 		denied = append(denied, readOnlyDenied...)
 	}
-	cmd = []string{claudeBin(), "-p", "--output-format", "json",
+	cmd = []string{claudeBin(), "-p", "--output-format", "stream-json", "--verbose",
 		"--max-turns", strconv.Itoa(node.maxTurns()),
 		"--max-budget-usd", strconv.FormatFloat(node.maxBudget(), 'f', -1, 64),
 		"--no-session-persistence"}
@@ -247,10 +247,11 @@ func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string
 	res.durationMS = time.Since(start).Milliseconds()
 	res.exitCode, res.logOut, res.logErr = code, out, errOut
 	if timedOut {
+		res.notes = streamActivity(out)
 		return res.fail("failure", "timeout", fmt.Sprintf("timed out after %ds", timeout))
 	}
-	d := &claudeResult{}
-	if err := json.Unmarshal([]byte(out), d); err != nil {
+	d, err := resultFromStream(out)
+	if err != nil {
 		return res.fail("failure", "engine_output_invalid", firstNonEmpty(lastLine(errOut), lastLine(out), fmt.Sprintf("exit %d", code)))
 	}
 	res.telemetry = Telemetry{GenAISystem: "anthropic", NumTurns: d.NumTurns, TotalCostUSD: d.TotalCostUSD,
@@ -398,4 +399,64 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// resultFromStream reads the final `result` event of `claude -p --output-format stream-json`.
+// A single JSON document (the plain json format) is accepted too.
+func resultFromStream(out string) (*claudeResult, error) {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		var probe struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal([]byte(line), &probe) == nil && probe.Type == "result" {
+			d := &claudeResult{}
+			return d, json.Unmarshal([]byte(line), d)
+		}
+	}
+	d := &claudeResult{}
+	return d, json.Unmarshal([]byte(out), d)
+}
+
+// streamActivity summarizes what an agent did before it was stopped: how many assistant
+// turns the stream shows and its last tool call (#30).
+func streamActivity(out string) string {
+	turns, last := 0, ""
+	for _, line := range strings.Split(out, "\n") {
+		var ev struct {
+			Type    string `json:"type"`
+			Message struct {
+				Content []struct {
+					Type  string         `json:"type"`
+					Name  string         `json:"name"`
+					Input map[string]any `json:"input"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(strings.TrimSpace(line)), &ev) != nil || ev.Type != "assistant" {
+			continue
+		}
+		turns++
+		for _, c := range ev.Message.Content {
+			if c.Type != "tool_use" {
+				continue
+			}
+			detail := ""
+			for _, k := range []string{"command", "file_path", "pattern"} {
+				if v, ok := c.Input[k].(string); ok {
+					detail = v
+					break
+				}
+			}
+			if r := []rune(detail); len(r) > 200 {
+				detail = string(r[:200])
+			}
+			last = strings.TrimSpace(c.Name + " " + strings.Join(strings.Fields(detail), " "))
+		}
+	}
+	if turns == 0 {
+		return "no agent activity before the timeout"
+	}
+	return fmt.Sprintf("assistant turns before the timeout: %d; last tool: %s", turns, firstNonEmpty(last, "none"))
 }
