@@ -34,6 +34,10 @@ Then check every item:
    outside the diff (another issue done, a file removed, a release published) is either true in
    the repository or worded as pending.
 
+A repository check that cannot start here because a tool it needs is missing (exit 126 or 127,
+"command not found", or the check's own skip status) is not a failed item: name it under
+"Not run here" in your review. The design's "done when" command is never in that case.
+
 ## Verdict
 
 - If the change passes every item, end with the line `APROBADO`.

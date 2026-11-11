@@ -112,6 +112,10 @@ check "pipeline: the implementer summary never reports push state" \
   'grep -qiE "summary.*(must not|never).*push" "$layer/implement.md" && grep -qF "You may commit; you never push." "$layer/implement.md"'
 check "pipeline: the review checks statements of fact" \
   'grep -qE "^8\. \*\*Statements of fact are true\.\*\*" "$layer/review.md"'
+check "pipeline: plan and implement report checks a missing tool prevents as not run, not as failures" \
+  'grep -qF "not runnable here" "$layer/plan.md" && grep -qF "list it once under \"Not run here\"" "$layer/implement.md" && grep -qF "This never applies to the \"done when\" command" "$layer/implement.md"'
+check "pipeline: the review does not fail a change for a check a missing tool prevents" \
+  'grep -qF "is not a failed item" "$layer/review.md" && grep -qF "\"Not run here\" in your review" "$layer/review.md"'
 check "design template: done_when must fail with a status other than 126 or 127 before the change" \
   'grep -qF "bash -c" "$template" && grep -qF "126" "$template" && grep -qF "127" "$template" && grep -qF "test -f tests/test_node_contract.sh && bash tests/test_node_contract.sh" "$template" && ! grep -qxF "  - \`bash tests/test_node_contract.sh\`" "$template"'
 check "design template: a design is self-contained" \
