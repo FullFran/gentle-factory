@@ -1,0 +1,41 @@
+{
+  "hcsVersion": "0.1",
+  "id": "dev.fullfran.gentle-factory",
+  "version": "0.1.0",
+  "entries": [
+    {
+      "id": "dev.fullfran.gentle-factory.pipeline",
+      "version": "0.1.0",
+      "contentHash": "sha256:70db219d3d0b67c98b04035fe3856392cea421a40d36ad7bd30fecac0c896dd7",
+      "contentId": "sha256:b3a33bec25e7d1250cd49da78d82a4a2a53665f531c51e2a7e8d15306121682a",
+      "size": 4469,
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "contributions": [
+        {
+          "kind": "x-gentle-factory-node",
+          "path": "check.sh"
+        },
+        {
+          "kind": "x-gentle-factory-spec",
+          "path": "factory.json"
+        },
+        {
+          "kind": "x-gentle-factory-prompt",
+          "path": "implement.md"
+        },
+        {
+          "kind": "x-gentle-factory-node",
+          "path": "open-pr.sh"
+        },
+        {
+          "kind": "x-gentle-factory-prompt",
+          "path": "plan.md"
+        },
+        {
+          "kind": "x-gentle-factory-prompt",
+          "path": "review.md"
+        }
+      ]
+    }
+  ]
+}
