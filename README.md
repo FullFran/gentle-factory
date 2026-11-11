@@ -95,6 +95,7 @@ bin/factory summary --repo /path/to/target [--json]
 bash tests/runner-test.sh                # builds the binary, uses claude and gh doubles, spends nothing
 bash tests/pipeline-test.sh              # the pipeline's code nodes, with doubles
 bash tests/start-test.sh                 # start and watch: clone, run, archive, clean up
+bash tests/status-test.sh                # factory status: JSON and summary from a status file
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -352,5 +353,13 @@ replaced. It never holds prompts, outputs, feedback, logs, tokens, issue titles 
 failed write prints `STATUS: write failed reason=...` and never changes a run. Its JSON Schema is
 `schemas/factory-status.schema.json`. `factory run` alone, `report`, `summary` and `panel` never
 write it.
+
+`factory status [--json]` reads that one file and prints it: with `--json` as indented JSON that
+validates against the same schema, otherwise as a short summary (update time, watcher, run in
+progress, queue, today's totals and the newest 5 runs). It never reads receipts and never
+writes. It exits 0 when it printed the file and 1 with `STATUS: status=MISSING` or
+`STATUS: status=INVALID` on stderr when the file is missing, unreadable, not strictly valid or of
+another `schema_version`. An unknown flag or a positional argument exits 2 with
+`STATUS: status=MISCONFIGURED`.
 
 `bash tests/start-test.sh` covers both with a local bare origin and `gh` and `claude` doubles.
