@@ -12,6 +12,8 @@ for tool in git go jq; do
 done
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/gentle-factory-start-test.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
+export XDG_STATE_HOME="$scratch/state"   # the status file (#43) never goes to the real home
+status_file="$XDG_STATE_HOME/gentle-factory/status.json"
 mkdir -p "$scratch/install"
 factory="$scratch/install/factory"   # built outside the repository: start must not need a checkout of it
 (cd "$here" && go build -o "$factory" ./cmd/factory) || { printf 'FAIL go build\n'; exit 1; }
@@ -34,6 +36,7 @@ case "${FAKE_MODE:-edit}" in
   edit) echo "attempt $FACTORY_ATTEMPT" >impl.txt ;;
   decision) result=$'no se\nDECISION: which one?' ;;
 esac
+[ -n "${FAKE_STATUS_COPY:-}" ] && cp "$XDG_STATE_HOME/gentle-factory/status.json" "$FAKE_STATUS_COPY"
 jq -n --arg r "$result" '{type:"result",subtype:"success",is_error:false,result:$r,num_turns:1,
   total_cost_usd:0.1,usage:{input_tokens:1,output_tokens:1}}'
 EOS
@@ -101,6 +104,9 @@ mk_list() { # mk_list OWNER/NAME N... -> open issues labelled factory:ready
   printf '%s\n' "$@" | jq -s 'map({number:.})' >"$FAKE_GH_DIR/list-$key.json"
 }
 empty_dir() { [ -z "$(find "$1" -mindepth 1 2>/dev/null | head -1)" ]; }
+# validate FILE: no error from the schema subset validator; a jq failure is never taken as valid.
+validate() { local errs; errs="$(jq -r --slurpfile schema "$here/schemas/factory-status.schema.json" -f "$here/tests/jsonschema-subset.jq" "$1")" && [ -z "$errs" ]; }
+st() { jq -e "$@" "$status_file" >/dev/null; }
 starts() { grep -c "^implement " "$FAKE_LOG"; }
 
 new_origin FullFran/bifrost
@@ -110,7 +116,7 @@ work="$scratch/work"; arch="$scratch/arch"
 
 # --- start -------------------------------------------------------------------
 
-out="$("$factory" start FullFran/bifrost#7 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
+out="$(FAKE_STATUS_COPY="$scratch/status-during.json" "$factory" start FullFran/bifrost#7 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
 last="$(tail -1 <<<"$out")"
 run_id="$(sed -n 's/^START: .* run=\([^ ]*\) .*/\1/p' <<<"$last")"
 check "start: completes a ready issue (exit 0, one START line last)" \
@@ -123,6 +129,36 @@ check "start: gh repo clone is how the repository was fetched" 'grep -q "^repo c
 check "start: reports how the run ended on the issue (#15)" \
   'grep -q "^issue comment 7 -R FullFran/bifrost" "$FAKE_GH_DIR/calls" && grep -q "factory-report:v1 run=run_.* state=complete" "$FAKE_GH_DIR/report-bodies"'
 check "start: the report drops factory:ready" 'grep -q "^issue edit 7 -R FullFran/bifrost.*--remove-label factory:ready" "$FAKE_GH_DIR/calls"'
+
+# --- status file (#43) ---------------------------------------------------------
+
+check "status: start writes status.json under XDG_STATE_HOME (file 0644, directory 0755)" \
+  '[ -f "$status_file" ] && [ "$(stat -c %a "$status_file")" = 644 ] && [ "$(stat -c %a "$XDG_STATE_HOME/gentle-factory")" = 755 ]'
+check "status: the file written by start validates against schemas/factory-status.schema.json" 'validate "$status_file"'
+jq '.prompt = "x"' "$status_file" >"$scratch/bad-unknown.json"
+jq '.last_runs[0].stop_detail = ("a" * 201)' "$status_file" >"$scratch/bad-detail.json"
+check "status: the validator rejects an unknown field and a stop_detail over 200 characters" \
+  '! validate "$scratch/bad-unknown.json" && ! validate "$scratch/bad-detail.json" && validate "$status_file"'
+check "status: a completed start is the newest of last_runs and no current_run remains" \
+  'st --arg r "$run_id" ".last_runs[0] | .run_id == \$r and .repository == \"FullFran/bifrost\" and .issue == 7 and .status == \"COMPLETE\"
+     and (has(\"stop_code\") | not) and .total_cost_usd == 0.1 and .retries == 0 and .duration_ms >= 0 and .finished_at >= .started_at" &&
+   st "has(\"current_run\") | not"'
+check "status: while a node runs, current_run names the run, the node, its kind and attempt" \
+  'jq -e --arg r "$run_id" ".current_run | .run_id == \$r and .node_id == \"implement\" and .node_kind == \"agent\" and .attempt == 1" "$scratch/status-during.json" >/dev/null'
+
+jq --arg cmd 'echo PR: https://github.com/FullFran/bifrost/pull/99' \
+  '.nodes += [{id: "output", kind: "code", read_only: true, command: ["bash", "-c", $cmd]}]' "$scratch/spec.json" >"$scratch/spec-pr.json"
+out="$("$factory" start FullFran/bifrost#7 --work-root "$work" --archive "$arch" --spec "$scratch/spec-pr.json" 2>&1)"; code=$?
+check "status: an output node's PR: line becomes pr_number" '[ "$code" = 0 ] && st ".last_runs[0].pr_number == 99"'
+
+echo "not json" >"$status_file"
+out="$("$factory" start FullFran/bifrost#7 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
+check "status: an unreadable status file is replaced and never fails a start" \
+  '[ "$code" = 0 ] && grep -q "^START: status=COMPLETE " <<<"$(tail -1 <<<"$out")" && validate "$status_file"'
+: >"$scratch/a-file"
+out="$(XDG_STATE_HOME="$scratch/a-file" "$factory" start FullFran/bifrost#7 --work-root "$work" --archive "$arch" --spec "$scratch/spec.json" 2>&1)"; code=$?
+check "status: an unwritable status path never changes the outcome of a start" \
+  '[ "$code" = 0 ] && grep -q "^START: status=COMPLETE " <<<"$(tail -1 <<<"$out")" && grep -q "^STATUS: write failed" <<<"$out"'
 
 : >"$FAKE_LOG"; mkdir -p "$scratch/kept"
 out="$("$factory" start FullFran/bifrost#7 --work-root "$scratch/kept" --archive "$arch" --spec "$scratch/spec.json" --keep 2>&1)"; code=$?
@@ -184,6 +220,14 @@ check "start: a stopped run is still archived under the XDG data default" \
   '[ "$(find "$scratch/xdg-data/gentle-factory/runs" -path "*/receipts/*.json" | wc -l | tr -d " ")" = 1 ]'
 check "start: the work root default is under XDG_CACHE_HOME and ends empty" \
   'empty_dir "$scratch/xdg-cache/gentle-factory/work"'
+check "status: a stopped run records stop_code user_decision_required and its question as stop_detail" \
+  'st ".last_runs[0] | .status == \"STOPPED\" and .stop_code == \"user_decision_required\" and .stop_detail == \"which one?\""'
+today="$(date -u +%F)"
+check "status: today counts the runs of the UTC day with their cost" \
+  'st --arg d "$today" ".today.date == \$d and .today.runs == .today.completed + .today.stopped and .today.total_cost_usd > 0
+     and .today.runs == ([.last_runs[] | select(.finished_at | startswith(\$d))] | length)"'
+check "status: no prompt, agent output or path of the box is in the file" \
+  '[ -f "$status_file" ] && ! grep -qE "Implement the change|hecho|no se" "$status_file" && ! grep -qF "$scratch" "$status_file"'
 
 # --- watch -------------------------------------------------------------------
 
@@ -224,8 +268,23 @@ check "watch: --slots defaults to 1, so one issue starts per pass" '[ "$(starts)
 watch --repo FullFran/bifrost --repo FullFran/other
 check "watch: the next pass starts the issue that waited" '[ "$(starts)" = 2 ]'
 : >"$FAKE_LOG"; rm -rf "$wwork"
-watch --repo FullFran/bifrost --repo FullFran/other --slots 2
+FAKE_STATUS_COPY="$scratch/status-watch.json" watch --repo FullFran/bifrost --repo FullFran/other --slots 2
 check "watch: --slots 2 starts both in one pass" '[ "$(starts)" = 2 ]'
+check "status: watch records started_at, last_pass_at, slots, repositories and the factory:ready queue" \
+  'st ".watcher.slots == 2 and .watcher.slots_busy == 0 and .watcher.repositories == [\"FullFran/bifrost\", \"FullFran/other\"]
+     and (.watcher.started_at | type) == \"string\" and (.watcher.last_pass_at | type) == \"string\"
+     and .queue == [{\"repository\": \"FullFran/bifrost\", \"issues\": [11]}, {\"repository\": \"FullFran/other\", \"issues\": [3]}]"'
+check "status: while watch runs an issue, slots_busy is 1" \
+  'jq -e ".watcher.slots_busy == 1 and (.current_run | type) == \"object\"" "$scratch/status-watch.json" >/dev/null'
+check "status: the file written by watch validates against schemas/factory-status.schema.json" 'validate "$status_file"'
+jq '.last_runs = [range(20) as $i | .last_runs[0] | .run_id = ("run_00000000-0000-4000-8000-0000000000" + ($i | tostring | if length == 1 then "0" + . else . end))]' \
+  "$status_file" >"$scratch/seeded.json" && mv "$scratch/seeded.json" "$status_file"
+: >"$FAKE_LOG"; rm -rf "$wwork"
+watch --repo FullFran/bifrost
+new_run="$(sed -n 's/^START: status=COMPLETE .* run=\([^ ]*\) .*/\1/p' <<<"$out")"
+check "status: last_runs survive a watcher restart and keep the newest 20" \
+  '[ "$(starts)" = 1 ] && [ -n "$new_run" ] && st --arg r "$new_run" ".last_runs | length == 20 and .[0].run_id == \$r
+     and .[1].run_id == \"run_00000000-0000-4000-8000-000000000000\" and all(.[]; .run_id != \"run_00000000-0000-4000-8000-000000000019\")"'
 
 : >"$FAKE_LOG"; rm -rf "$wwork"; mkdir -p "$wwork/locks"
 echo $$ >"$wwork/locks/FullFran+bifrost+11.lock"

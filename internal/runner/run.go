@@ -29,7 +29,9 @@ type runCtx struct {
 	protected                                         []string
 	store                                             *Store
 	out                                               io.Writer
-	attempts                                          []spanAttempt // node attempts of this invocation, for the OTLP export
+	attempts                                          []spanAttempt                          // node attempts of this invocation, for the OTLP export
+	onNode                                            func(nodeID, kind string, attempt int) // status file (#43); nil when unused
+	onStop                                            func(reason, detail string)
 }
 
 func randomHex(n int) string {
@@ -109,6 +111,9 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 	protectedBefore := pathDigests(rc.repo, rc.protected)
 	storeBefore := pathDigests(rc.store.runsDir, []string{"."})
 	fmt.Fprintf(rc.out, "NODE: id=%s attempt=%d kind=%s\n", node.ID, attempt, node.Kind)
+	if rc.onNode != nil {
+		rc.onNode(node.ID, node.Kind, attempt)
+	}
 
 	var res *result
 	start := time.Now()
@@ -182,12 +187,17 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 
 func (rc *runCtx) stop(nodeID, reason, detail string) int {
 	fmt.Fprintf(rc.out, "RUN: status=STOPPED node=%s reason=%s detail=%s\n", nodeID, reason, strings.Join(strings.Fields(detail), " "))
+	if rc.onStop != nil {
+		rc.onStop(reason, detail)
+	}
 	return exitStopped
 }
 
 type runArgs struct {
 	spec, repo, context, runID, runsDir string
-	stderr                              io.Writer // OTLP export warnings; nil disables the export
+	stderr                              io.Writer                              // OTLP export warnings; nil disables the export
+	onNode                              func(nodeID, kind string, attempt int) // called on each node attempt (status file, #43)
+	onStop                              func(reason, detail string)            // called with the values of the RUN: status=STOPPED line
 }
 
 func runFactory(a runArgs, out io.Writer) (int, error) {
@@ -254,7 +264,8 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 	rc := &runCtx{factory: spec.Factory, runID: runID, repo: repo, specDir: spec.dir, baseCommit: base,
 		branch: strings.TrimSpace(branch), traceID: traceID,
 		traceparent: fmt.Sprintf("00-%s-%s-01", traceID, randomHex(8)),
-		context:     context, protected: spec.ProtectedPaths, store: store, out: out}
+		context:     context, protected: spec.ProtectedPaths, store: store, out: out,
+		onNode: a.onNode, onStop: a.onStop}
 	if a.stderr != nil {
 		// Whatever the run status: every return below has written its last receipt.
 		defer func() { exportTrace(rc, rc.attempts, start, time.Now(), a.stderr) }()

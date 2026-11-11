@@ -333,4 +333,18 @@ same design never starts twice and an edited design starts again. A `watch.lock`
 two watchers apart. Stop a running watcher with Ctrl-C; it exits between passes. The state file is the only
 thing `watch` leaves in the work root. Locks hold the pid of their owner and are taken over when it is dead.
 
+**Status file (#43).** `start` and `watch` keep one small JSON file for the panel at
+`${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json` (mode 0644, directory 0755).
+It is rewritten atomically (temporary file, then rename) when a watcher starts, on every pass,
+when a run starts, on every node transition and when a run ends. It holds the watcher
+(`started_at`, `last_pass_at`, `slots`, `slots_busy`, repositories), the run in progress (run id,
+issue, node, kind, attempt), the newest 20 runs (status, a stop code and at most 200 characters
+of stop reason, cost, duration, retries, pull request number, model), the open `factory:ready`
+issue numbers per repository and the totals of the current UTC day. Each write starts from the
+previous file, so the runs and the day totals survive a watcher restart; an unreadable file is
+replaced. It never holds prompts, outputs, feedback, logs, tokens, issue titles or paths. A
+failed write prints `STATUS: write failed reason=...` and never changes a run. Its JSON Schema is
+`schemas/factory-status.schema.json`. `factory run` alone, `report`, `summary` and `panel` never
+write it.
+
 `bash tests/start-test.sh` covers both with a local bare origin and `gh` and `claude` doubles.

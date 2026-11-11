@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gentle-factory:schema:factory-status:1.0",
+  "title": "gentle-factory status file",
+  "description": "Allow-listed, bounded status that factory watch and factory start write for the panel; never prompts, outputs, feedback, logs, tokens or paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "last_runs", "queue", "today"],
+  "properties": {
+    "schema_version": {"description": "Version of this format.", "type": "string", "const": "1.0"},
+    "updated_at": {"description": "When the file was last written (UTC).", "$ref": "#/$defs/timestamp"},
+    "watcher": {
+      "description": "The watcher that writes the file, when one runs or ran.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "slots", "slots_busy", "repositories"],
+      "properties": {
+        "started_at": {"description": "When the watcher started.", "$ref": "#/$defs/timestamp"},
+        "last_pass_at": {"description": "When the watcher last finished a pass.", "$ref": "#/$defs/timestamp"},
+        "slots": {"description": "Issues started per pass.", "type": "integer", "minimum": 1, "maximum": 1000},
+        "slots_busy": {"description": "Runs in progress.", "type": "integer", "minimum": 0, "maximum": 1000},
+        "repositories": {"description": "Repositories watched.", "type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/repository"}}
+      }
+    },
+    "current_run": {
+      "description": "The run in progress, when there is one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "repository", "issue", "started_at"],
+      "properties": {
+        "run_id": {"description": "Run identifier.", "$ref": "#/$defs/run_id"},
+        "repository": {"description": "Repository of the issue.", "$ref": "#/$defs/repository"},
+        "issue": {"description": "Issue number.", "$ref": "#/$defs/issue"},
+        "started_at": {"description": "When the run started.", "$ref": "#/$defs/timestamp"},
+        "node_id": {"description": "Node in progress.", "type": "string", "maxLength": 64, "pattern": "^[a-z0-9_-]+$"},
+        "node_kind": {"description": "Kind of the node in progress.", "enum": ["agent", "code"]},
+        "attempt": {"description": "Attempt of the node in progress.", "type": "integer", "minimum": 1, "maximum": 1000}
+      }
+    },
+    "last_runs": {
+      "description": "The newest finished runs, newest first.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "description": "One finished run.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run_id", "repository", "issue", "started_at", "finished_at", "status", "total_cost_usd", "duration_ms", "retries"],
+        "properties": {
+          "run_id": {"description": "Run identifier.", "$ref": "#/$defs/run_id"},
+          "repository": {"description": "Repository of the issue.", "$ref": "#/$defs/repository"},
+          "issue": {"description": "Issue number.", "$ref": "#/$defs/issue"},
+          "started_at": {"description": "When the run started.", "$ref": "#/$defs/timestamp"},
+          "finished_at": {"description": "When the run ended.", "$ref": "#/$defs/timestamp"},
+          "status": {"description": "How the run ended.", "enum": ["COMPLETE", "STOPPED"]},
+          "stop_code": {"description": "Why a stopped run stopped.", "enum": ["user_decision_required", "step_failed", "gate_failed", "timeout", "max_turns_exceeded", "budget_exceeded", "engine_error", "engine_output_invalid", "misconfigured", "read_only_modified", "protected_path_modified", "unexpected_path_modified", "same_failure_signature", "retries_exhausted", "archive_failed", "other"]},
+          "stop_detail": {"description": "Short stop reason, flattened and path-scrubbed.", "type": "string", "maxLength": 200, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+          "total_cost_usd": {"description": "Sum of the cost of the run's attempts.", "type": "number", "minimum": 0, "maximum": 100000},
+          "duration_ms": {"description": "Wall time of the run.", "type": "integer", "minimum": 0},
+          "retries": {"description": "Node attempts after the first.", "type": "integer", "minimum": 0},
+          "pr_number": {"description": "Pull request opened by the run.", "type": "integer", "minimum": 1},
+          "request_model": {"description": "Model requested by the last agent attempt.", "type": "string", "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\[\\]:-]*$"}
+        }
+      }
+    },
+    "queue": {
+      "description": "Open issues labelled factory:ready, per repository.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "description": "The ready issues of one repository.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "issues"],
+        "properties": {
+          "repository": {"description": "Repository.", "$ref": "#/$defs/repository"},
+          "issues": {"description": "Issue numbers.", "type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/issue"}}
+        }
+      }
+    },
+    "today": {
+      "description": "Totals of the runs that finished on the current UTC day.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "runs", "completed", "stopped", "total_cost_usd"],
+      "properties": {
+        "date": {"description": "The UTC day.", "type": "string", "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "runs": {"description": "Runs finished.", "type": "integer", "minimum": 0},
+        "completed": {"description": "Runs that completed.", "type": "integer", "minimum": 0},
+        "stopped": {"description": "Runs that stopped.", "type": "integer", "minimum": 0},
+        "total_cost_usd": {"description": "Cost of those runs.", "type": "number", "minimum": 0, "maximum": 100000}
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": {"description": "UTC time, second precision.", "type": "string", "maxLength": 20, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "format": "date-time"},
+    "repository": {"description": "GitHub repository OWNER/NAME.", "type": "string", "maxLength": 140, "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$"},
+    "issue": {"description": "Issue number.", "type": "integer", "minimum": 1, "maximum": 2147483647},
+    "run_id": {"description": "Run identifier.", "type": "string", "maxLength": 40, "pattern": "^run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}
+  }
+}

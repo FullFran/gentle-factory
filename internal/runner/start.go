@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/FullFran/gentle-factory/pipeline"
 )
@@ -31,6 +32,7 @@ const (
 type startOpts struct {
 	workRoot, archive, spec string
 	keep                    bool
+	statusPath              string // the status file (#43), resolved from XDG_STATE_HOME
 }
 
 // startResult is the outcome of one start. locked means nothing ran because
@@ -86,6 +88,16 @@ func (o *startOpts) resolve() error {
 		if o.spec, err = filepath.Abs(o.spec); err != nil {
 			return err
 		}
+	}
+	if o.statusPath == "" {
+		state, err := xdgDir("XDG_STATE_HOME", filepath.Join(".local", "state"))
+		if err != nil {
+			return err
+		}
+		if state, err = filepath.Abs(state); err != nil {
+			return err
+		}
+		o.statusPath = statusPathFor(state)
 	}
 	return nil
 }
@@ -285,7 +297,28 @@ func startIssue(repo string, issue int, o startOpts, out io.Writer) (res startRe
 	}
 
 	runID := newRunID()
-	code, runErr := runFactory(runArgs{spec: spec, repo: clone, context: filepath.Join(ctxDir, "context.json"), runID: runID}, out)
+	// The status file (#43): the run is current while it lasts and recorded once it ends. This
+	// defer runs before the clone is removed, so the run's receipts and logs are still there.
+	started := time.Now()
+	current := currentRun{RunID: runID, Repository: repo, Issue: issue, StartedAt: statusTime(started)}
+	updateStatus(o.statusPath, out, func(s *factoryStatus) { c := current; s.CurrentRun = &c })
+	var finished time.Time
+	var runErr, archiveErr error
+	var stopReason, stopDetail string
+	defer func() {
+		recordRun(o.statusPath, out, buildRunRecord(runOutcome{runID: runID, repo: repo, issue: issue,
+			started: started, finished: finished, complete: res.status == startComplete,
+			stopReason: stopReason, detail: stopDetail, runErr: runErr, archiveErr: archiveErr,
+			runDir: filepath.Join(clone, "odd", "runs", runID)}))
+	}()
+	onNode := func(nodeID, kind string, attempt int) {
+		current.NodeID, current.NodeKind, current.Attempt = nodeID, kind, attempt
+		updateStatus(o.statusPath, out, func(s *factoryStatus) { c := current; s.CurrentRun = &c })
+	}
+	onStop := func(reason, detail string) { stopReason, stopDetail = reason, detail }
+	code, runErr := runFactory(runArgs{spec: spec, repo: clone, context: filepath.Join(ctxDir, "context.json"), runID: runID,
+		onNode: onNode, onStop: onStop}, out)
+	finished = time.Now()
 	switch {
 	case runErr != nil:
 		fmt.Fprintf(out, "START: reason=%s\n", strings.Join(strings.Fields(runErr.Error()), " "))
@@ -301,6 +334,7 @@ func startIssue(repo string, issue int, o startOpts, out io.Writer) (res startRe
 		dst := filepath.Join(o.archive, runID)
 		if err := copyTree(src, dst); err != nil {
 			keep = true
+			archiveErr = err
 			fmt.Fprintf(out, "START: reason=cannot archive the receipts to %s: %v\n", dst, err)
 			res.status = startMisconfigured
 			res.run = runID
