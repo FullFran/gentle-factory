@@ -70,17 +70,17 @@
     "budget_cap_usd": {
       "type": "number",
       "minimum": 0,
-      "description": "Optional custom budget cap override for this issue in USD."
+      "description": "Lowers the matching per-node cap of the factory spec for every node of this issue's run; never raises it."
     },
     "turn_cap": {
       "type": "integer",
       "minimum": 1,
-      "description": "Optional custom turn cap override for this issue."
+      "description": "Lowers the matching per-node cap of the factory spec for every node of this issue's run; never raises it."
     },
     "timeout_seconds": {
       "type": "integer",
       "minimum": 1,
-      "description": "Optional outer timeout override in seconds."
+      "description": "Lowers the matching per-node cap of the factory spec for every node of this issue's run; never raises it."
     },
     "slice": {
       "type": "boolean",

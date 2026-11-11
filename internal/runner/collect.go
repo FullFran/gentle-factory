@@ -176,7 +176,8 @@ func collect(a collectArgs, stdout io.Writer) error {
 	}
 	ctx := Context{Repository: a.repo, Issue: &IssueRef{Number: issue.Number, URL: issue.URL}, DesignComment: comment,
 		DoneWhen: design.DoneWhen, ExpectedFiles: design.ExpectedFiles, DesignFile: "design.md", IssueFile: "issue.md",
-		Slice: design.Slice != nil && *design.Slice}
+		Slice: design.Slice != nil && *design.Slice, BudgetCapUSD: design.BudgetCapUSD, TurnCap: design.TurnCap,
+		TimeoutSeconds: design.TimeoutSeconds}
 	files := map[string]string{
 		"design.md": body,
 		"issue.md":  fmt.Sprintf("# %s\n\n%s\n", issue.Title, issue.Body),

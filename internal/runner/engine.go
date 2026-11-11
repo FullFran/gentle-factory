@@ -134,7 +134,7 @@ func claudeBin() string {
 	return "claude"
 }
 
-func claudeCommand(node *Node) (cmd, tools []string) {
+func claudeCommand(node *Node, c *Context) (cmd, tools []string) {
 	denied := append(append([]string{}, deniedBash...), node.Deny...)
 	for _, t := range node.Tools {
 		if !(node.ReadOnly && contains(readOnlyDenied, t)) {
@@ -145,8 +145,8 @@ func claudeCommand(node *Node) (cmd, tools []string) {
 		denied = append(denied, readOnlyDenied...)
 	}
 	cmd = []string{claudeBin(), "-p", "--output-format", "stream-json", "--verbose",
-		"--max-turns", strconv.Itoa(node.maxTurns()),
-		"--max-budget-usd", strconv.FormatFloat(node.maxBudget(), 'f', -1, 64),
+		"--max-turns", strconv.Itoa(effectiveTurns(node, c)),
+		"--max-budget-usd", strconv.FormatFloat(effectiveBudget(node, c), 'f', -1, 64),
 		"--no-session-persistence"}
 	if node.Model != "" {
 		cmd = append(cmd, "--model", node.Model)
@@ -237,9 +237,9 @@ func runAgent(rc *runCtx, node *Node, attempt int, feedback, feedbackFile string
 		extra, err = promptSections(rc, upstream)
 		prompt += extra
 	}
-	cmd, tools := claudeCommand(node)
-	timeout := node.timeout(1800)
-	turns, budget := node.maxTurns(), node.maxBudget()
+	cmd, tools := claudeCommand(node, rc.context)
+	timeout := effectiveTimeout(node, rc.context, 1800)
+	turns, budget := effectiveTurns(node, rc.context), effectiveBudget(node, rc.context)
 	res := &result{engine: "claude-code-headless", command: cmd, tools: tools,
 		caps: Caps{MaxTurns: &turns, MaxBudgetUSD: &budget, TimeoutSeconds: timeout}}
 	if err != nil {
@@ -298,7 +298,7 @@ func runCode(rc *runCtx, node *Node, attempt int, feedbackFile string) *result {
 	for i, a := range node.Command {
 		cmd[i] = repl.Replace(a)
 	}
-	timeout := node.timeout(600)
+	timeout := effectiveTimeout(node, rc.context, 600)
 	env := nodeEnv(rc, node, attempt, feedbackFile, "code")
 	start := time.Now()
 	code, out, errOut, timedOut := runProcess(cmd, rc.repo, env, "", timeout)
