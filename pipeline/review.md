@@ -30,6 +30,9 @@ Then check every item:
    code, tests, docs or the summary.
 6. **Follows the repository's conventions** found above (commit format, style, structure).
 7. **Docs follow behavior.** When users can see the change, the matching doc says so.
+8. **Statements of fact are true.** Any sentence the change adds about the state of something
+   outside the diff (another issue done, a file removed, a release published) is either true in
+   the repository or worded as pending.
 
 ## Verdict
 

@@ -22,3 +22,5 @@ Rules:
 
 Finish with a short summary: what changed and why, the test you added, and the commands
 you ran with their results. This summary becomes the body of the draft pull request.
+The summary must not state whether anything was pushed or committed locally: the output node
+pushes the branch and opens the pull request afterwards.
