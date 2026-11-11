@@ -460,6 +460,7 @@ check "collect: writes the design and issue texts next to the context" \
   'grep -q "Resolve the bifrost binary" "$scratch/collect-ok-out/design.md" && grep -q "Every agy run fails." "$scratch/collect-ok-out/issue.md" && grep -q "agy: spawn bifrost ENOENT" "$scratch/collect-ok-out/issue.md"'
 check "collect: checks out factory/7 from origin's default branch" \
   '[ "$(git -C "$co" rev-parse --abbrev-ref HEAD)" = factory/7 ] && [ "$(git -C "$co" rev-parse HEAD)" = "$(git -C "$co" rev-parse origin/main)" ]'
+check "collect: a design without slice writes slice false to context.json" '[ "$(jq .slice "$ctx")" = false ]'
 check "collect: the context is accepted by run" \
   'out="$("$factory" run --spec "$scratch/spec.json" --repo "$co" --context "$ctx" 2>&1)"; grep -q "RUN: id=.* task=FullFran/bifrost#7" <<<"$out"'
 collect "$co" "$scratch/collect-again"
@@ -482,6 +483,15 @@ not_ready absolute-path "${good/pi\/runtime.mjs/\/etc\/passwd}" 'expected_files 
 not_ready dotdot-path "${good/pi\/runtime.mjs/pi\/..\/..\/x}" 'expected_files entry "pi/../../x"'
 not_ready protected-path "${good/pi\/runtime.mjs/gates\/gate.sh}" 'expected_files entry "gates/gate.sh"'
 not_ready bad-json '{"schema_version": ' 'design block is not valid JSON'
+setup_gh factory:ready "${good/\"issue\": 7/\"issue\": 7, \"slice\": true}"
+co="$(new_checkout collect-slice)"
+collect "$co" "$scratch/out-slice"
+check "collect: a design with slice true writes slice true to context.json" \
+  '[ "$code" = 0 ] && [ "$(jq .slice "$scratch/out-slice/context.json")" = true ]'
+setup_gh factory:ready "${good/\"issue\": 7/\"issue\": 7, \"slice\": \"yes\"}"
+collect "$(new_checkout collect-slice-str)" "$scratch/out-slice-str"
+check "collect: a non-boolean slice is NOT_READY" \
+  '[ "$code" = 1 ] && grep -qF slice <<<"$out" && grep -q "COLLECT: status=NOT_READY" <<<"$out" && [ ! -e "$scratch/out-slice-str/context.json" ]'
 
 # The design's done_when must fail before any change, or it proves nothing.
 setup_gh factory:ready "${good/test -f fixed.txt/true}"

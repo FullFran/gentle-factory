@@ -28,9 +28,11 @@ telemetry="$(jq -rs '
 run_id="$(basename "$run_dir")"
 base_branch="$(git rev-parse --abbrev-ref origin/HEAD 2>/dev/null || echo origin/main)"
 base_branch="${base_branch#origin/}"
+ref="Closes"  # a design that is only a slice of the issue must not close it on merge
+[ "$(jq -r '.slice // false' "$ctx")" = true ] && ref="Part of"
 body="$(mktemp)"; trap 'rm -f "$body"' EXIT
 {
-  printf 'Closes #%s\n\n## What\n\n' "$issue"
+  printf '%s #%s\n\n## What\n\n' "$ref" "$issue"
   cat "$run_dir/outputs/implement.md" 2>/dev/null || echo "(no implementer summary)"
   printf '\n\n## Review\n\n'
   tail -n 40 "$run_dir/outputs/review.md" 2>/dev/null || echo "(no review output)"

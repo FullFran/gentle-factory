@@ -81,6 +81,10 @@
       "type": "integer",
       "minimum": 1,
       "description": "Optional outer timeout override in seconds."
+    },
+    "slice": {
+      "type": "boolean",
+      "description": "true when the design delivers only part of the issue; the pull request then refers to the issue without closing it"
     }
   }
 }

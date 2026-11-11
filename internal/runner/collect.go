@@ -35,6 +35,7 @@ type Design struct {
 	BudgetCapUSD   *float64 `json:"budget_cap_usd,omitempty"`
 	TurnCap        *int     `json:"turn_cap,omitempty"`
 	TimeoutSeconds *int     `json:"timeout_seconds,omitempty"`
+	Slice          *bool    `json:"slice,omitempty"`
 }
 
 func ghBin() string {
@@ -174,7 +175,8 @@ func collect(a collectArgs, stdout io.Writer) error {
 		return err
 	}
 	ctx := Context{Repository: a.repo, Issue: &IssueRef{Number: issue.Number, URL: issue.URL}, DesignComment: comment,
-		DoneWhen: design.DoneWhen, ExpectedFiles: design.ExpectedFiles, DesignFile: "design.md", IssueFile: "issue.md"}
+		DoneWhen: design.DoneWhen, ExpectedFiles: design.ExpectedFiles, DesignFile: "design.md", IssueFile: "issue.md",
+		Slice: design.Slice != nil && *design.Slice}
 	files := map[string]string{
 		"design.md": body,
 		"issue.md":  fmt.Sprintf("# %s\n\n%s\n", issue.Title, issue.Body),

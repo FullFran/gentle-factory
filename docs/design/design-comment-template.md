@@ -55,6 +55,8 @@ The design comment employs a dual-layer architecture:
 └──────────────────────────────────────────────────────────────┘
 ```
 
+The optional JSON member `slice` (boolean, default `false`) is set to `true` when the design delivers only part of the issue: the draft PR then starts with `Part of #<issue>` instead of `Closes #<issue>`, so merging it does not close the issue.
+
 ---
 
 ## 3. Section Specifications
