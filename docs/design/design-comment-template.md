@@ -64,8 +64,9 @@ The design comment employs a dual-layer architecture:
 A natural language goal (e.g. "make it work") cannot be verified deterministically. The design must provide a machine-checkable command or test script:
 - Must execute locally without interactive prompts;
 - Must exit with status code `0` on success and non-zero on failure;
+- Must fail before the change: `collect` runs `done_when` with `bash -c` before any change and rejects exit `0`, exit `126`/`127` (command not found or not executable, which proves nothing) and a timeout. A `done_when` that runs a test file the change will add must first check that the file exists (`test -f tests/x.sh && bash tests/x.sh`). Run it on the default branch and confirm it fails with a status other than `126` or `127`;
 - Examples:
-  - `bash tests/test_node_contract.sh`
+  - `test -f tests/test_node_contract.sh && bash tests/test_node_contract.sh`
   - `pytest tests/test_receipt.py -k test_validation`
   - `cargo test --test gate_verification`
 
@@ -92,6 +93,10 @@ Explicitly lists what the factory **must not do**. Examples:
 ### 3.5 Invariants & Fallback Guidance
 
 Names existing helper functions, shared state parsers, or normalizers that must be reused. Reiterates that any unaddressed ambiguity triggers an immediate stop.
+
+### 3.6 A design is self-contained
+
+Agent nodes read the issue body and the design comment only. They cannot read other issue comments, linked issues or the network. Anything the change must quote (a decision record, a list of answers) is copied into the design.
 
 ---
 

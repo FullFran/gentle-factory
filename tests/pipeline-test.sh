@@ -101,5 +101,16 @@ echo '[{"url":"https://github.com/FullFran/bifrost/pull/99"}]' >"$scratch/existi
 out="$(cd "$co" && FAKE_GH_EXISTING="$scratch/existing.json" bash "$layer/open-pr.sh" "$run_dir" "$base" 2>&1)"; code=$?
 check "output: on resume an open PR is reused, not duplicated" '[ "$code" = 0 ] && ! grep -q "^pr create" "$FAKE_GH_CALLS" && grep -q "already open" <<<"$out"'
 
+# Prompt and design-template guidance learned from the first unattended runs.
+template="$here/docs/design/design-comment-template.md"
+check "pipeline: the implementer summary never reports push state" \
+  'grep -qiE "summary.*(must not|never).*push" "$layer/implement.md" && grep -qF "You may commit; you never push." "$layer/implement.md"'
+check "pipeline: the review checks statements of fact" \
+  'grep -qE "^8\. \*\*Statements of fact are true\.\*\*" "$layer/review.md"'
+check "design template: done_when must fail with a status other than 126 or 127 before the change" \
+  'grep -qF "bash -c" "$template" && grep -qF "126" "$template" && grep -qF "127" "$template" && grep -qF "test -f tests/test_node_contract.sh && bash tests/test_node_contract.sh" "$template" && ! grep -qxF "  - \`bash tests/test_node_contract.sh\`" "$template"'
+check "design template: a design is self-contained" \
+  'grep -qE "^### 3\.[0-9]+ A design is self-contained" "$template" && grep -qi "cannot read other issue comments" "$template"'
+
 printf 'RESULT: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" = 0 ]
