@@ -92,6 +92,13 @@ type watchOpts struct {
 
 // watchPass starts, sequentially, up to slots ready issues whose design was not started yet.
 func watchPass(w watchOpts, statePath string, out io.Writer) error {
+	sp := w.start.statusPath
+	// Every pass ends by saying so in the status file (#43), also when it had errors.
+	defer updateStatus(sp, out, func(s *factoryStatus) {
+		if s.Watcher != nil {
+			s.Watcher.LastPassAt = statusTime(time.Now())
+		}
+	})
 	state, err := loadWatchState(statePath)
 	if err != nil {
 		return err
@@ -110,6 +117,7 @@ func watchPass(w watchOpts, statePath string, out io.Writer) error {
 			note(err)
 			continue
 		}
+		updateStatus(sp, out, func(s *factoryStatus) { setQueue(s, repo, numbers) })
 		open, err := openFactoryPRs(repo)
 		if err != nil {
 			note(err)
@@ -134,7 +142,9 @@ func watchPass(w watchOpts, statePath string, out io.Writer) error {
 				skip("slots_full")
 			default:
 				fmt.Fprintf(out, "WATCH: issue=%s start design=%s\n", key, sha[:12])
+				updateStatus(sp, out, func(s *factoryStatus) { setSlotsBusy(s, 1) })
 				res := startIssue(repo, n, w.start, out)
+				updateStatus(sp, out, func(s *factoryStatus) { setSlotsBusy(s, 0) })
 				printStart(out, repo, n, res)
 				if res.locked {
 					continue // another run owns it; it neither consumes a slot nor counts as started
@@ -192,6 +202,7 @@ func cmdWatch(args []string, stdout, stderr io.Writer) (int, error) {
 		return 0, err
 	}
 	defer release()
+	updateStatus(w.start.statusPath, stdout, func(s *factoryStatus) { startWatcher(s, w) })
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
@@ -236,4 +247,39 @@ func openFactoryPRs(repo string) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// startWatcher sets the watcher section of the status file (#43) when a watcher takes its
+// lock. A run left as current by a crashed process is not running anymore, and only the
+// queue of watched repositories is kept, in the order they are watched.
+func startWatcher(s *factoryStatus, w watchOpts) {
+	s.Watcher = &watcherStatus{StartedAt: statusTime(time.Now()), Slots: w.slots, Repositories: append([]string{}, w.repos...)}
+	s.CurrentRun = nil
+	queue := []queueEntry{}
+	for _, repo := range w.repos {
+		for _, q := range s.Queue {
+			if q.Repository == repo {
+				queue = append(queue, q)
+				break
+			}
+		}
+	}
+	s.Queue = queue
+}
+
+func setSlotsBusy(s *factoryStatus, n int) {
+	if s.Watcher != nil {
+		s.Watcher.SlotsBusy = n
+	}
+}
+
+// setQueue replaces the ready issues of repo, or adds them after the other repositories.
+func setQueue(s *factoryStatus, repo string, numbers []int) {
+	for i := range s.Queue {
+		if s.Queue[i].Repository == repo {
+			s.Queue[i].Issues = append([]int{}, numbers...)
+			return
+		}
+	}
+	s.Queue = append(s.Queue, queueEntry{Repository: repo, Issues: append([]int{}, numbers...)})
 }

@@ -30,6 +30,8 @@ Usage:
       gentle-factory/runs/<run_id>) and delete the clone unless --keep. An existing
       factory/N on origin is kept, renamed to factory/N-<run_id>, and the run starts
       from a fresh factory/N; it stops before running when an open PR uses factory/N.
+      A run is recorded in the status file
+      ${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json (see README).
       Last line:
       START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=... run=ID archive=DIR
   factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
@@ -39,6 +41,7 @@ Usage:
       draft PRs of that repository await review. A design is started once: the sha256 of its comment is kept in
       <work-root>/watch-state.json and a changed design starts again. Locks keep two
       watchers, or two runs of one issue, apart. --once does a single pass.
+      The watcher, its queue and its runs are written to the same status file as "start".
   factory report --runs-dir DIR --run-id ID --context FILE
       Tell the owner how a run ended: post one issue comment (complete with the
       draft PR link, needs_decision with the question, or stopped with the
