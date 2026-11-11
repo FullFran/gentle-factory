@@ -148,6 +148,8 @@ check "success: trace context reaches the agent and the receipt" \
   'grep -q "TRACEPARENT: 00-$(receipt "$repo" 1 | jq -r .telemetry.trace_id)-" "$FAKE_LOG"'
 check "success: agent telemetry recorded from the engine JSON" \
   '[ "$(receipt "$repo" 1 | jq -c "[.telemetry.total_cost_usd,.telemetry.num_turns,.telemetry.tokens.total_tokens,.telemetry.request_model]")" = "[0.25,3,120,\"claude-fake-1\"]" ]'
+check "success: the receipt keeps cache reads and cache writes apart inside input tokens" \
+  '[ "$(receipt "$repo" 1 | jq -c "[.telemetry.tokens.input_tokens,.telemetry.tokens.cache_read_input_tokens,.telemetry.tokens.cache_creation_input_tokens]")" = "[100,50,10]" ]'
 check "success: agent decisions recorded as notes" '[ "$(receipt "$repo" 1 | jq -r .notes)" = hecho ]'
 check "success: verify receipt is a success code receipt" \
   '[ "$(receipt "$repo" 2 | jq -r "[.step.node_id,.outcome.status]|join(\",\")")" = "verify,success" ]'

@@ -171,7 +171,7 @@ type claudeResult struct {
 
 // tokenUsage sums modelUsage; top-level usage is all zeros on error results.
 func tokenUsage(d *claudeResult) *Tokens {
-	var in, out int64
+	var in, cr, cc, out int64
 	seen := false
 	for _, u := range d.ModelUsage {
 		o, ok := u["outputTokens"].(float64)
@@ -182,6 +182,12 @@ func tokenUsage(d *claudeResult) *Tokens {
 		for _, k := range []string{"inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"} {
 			if v, ok := u[k].(float64); ok {
 				in += int64(v)
+				switch k {
+				case "cacheReadInputTokens":
+					cr += int64(v)
+				case "cacheCreationInputTokens":
+					cc += int64(v)
+				}
 			}
 		}
 		out += int64(o)
@@ -197,11 +203,11 @@ func tokenUsage(d *claudeResult) *Tokens {
 		if !ok1 || !ok2 {
 			return nil
 		}
-		cr, _ := num("cache_read_input_tokens")
-		cc, _ := num("cache_creation_input_tokens")
+		cr, _ = num("cache_read_input_tokens")
+		cc, _ = num("cache_creation_input_tokens")
 		in, out = i+cr+cc, o
 	}
-	return &Tokens{InputTokens: in, OutputTokens: out, TotalTokens: in + out}
+	return &Tokens{InputTokens: in, CacheReadInputTokens: cr, CacheCreationInputTokens: cc, OutputTokens: out, TotalTokens: in + out}
 }
 
 // promptSections appends the issue, the design and the upstream outputs to a node prompt.
