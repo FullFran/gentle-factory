@@ -15,7 +15,7 @@ ustar archive compressed with gzip. Never edit `catalog.json` by hand.
 
 ```bash
 go run ./cmd/catalog build [--archive FILE]   # rewrite catalog.json (and write the package bytes to FILE)
-go run ./cmd/catalog check                    # exit 1 when catalog.json does not match the embedded pipeline
+go run ./cmd/catalog check                    # exit 1 when catalog.json does not match the embedded pipeline (contentId)
 ```
 
 Run `build` after any change to an embedded file under `pipeline/`, including a new
@@ -28,9 +28,12 @@ the command, so to test a change to `pipeline/` run the command from that tree.
 ## Toolchain limit
 
 `contentHash` and `size` depend on the gzip output of the Go standard library. That
-output is stable for a given Go toolchain but is not guaranteed across Go versions, so
-a toolchain upgrade can make `check` fail until `build` is run again. `contentId` does
-not depend on compression.
+output is stable for a given Go toolchain but differs across Go versions (the catalog
+built in the factory box and a rebuild on a laptop with another Go give different gzip
+bytes). `contentId`, the sha256 of the uncompressed tar, does not depend on compression,
+so `check` treats it as the content identity: a different `contentId` fails; the same
+`contentId` with a different `contentHash` or `size` prints a `WARN` line and exits 0.
+Run `build` to refresh the gzip fields for your toolchain.
 
 The HCS schemas are vendored in `../schemas/hcs/`; validating `catalog.json` against
 them with a JSON Schema validator is a later slice.

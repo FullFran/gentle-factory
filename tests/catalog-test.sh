@@ -47,7 +47,9 @@ if [[ $(wc -c <"$SCRATCH/a.tgz") == "$(field size)" ]]; then ok archive-size; el
 if [[ $(tar -tzf "$SCRATCH/a.tgz") == "$(jq -r '.entries[0].contributions[].path' "$ACAT" | LC_ALL=C sort)" ]]; then ok archive-listing; else ko archive-listing; fi
 if [[ "sha256:$(gzip -dc "$SCRATCH/a.tgz" | sha256sum | cut -d' ' -f1)" == "$(field contentId)" ]]; then ok archive-contentId; else ko archive-contentId; fi
 if cmp -s "$SCRATCH/a.tgz" "$SCRATCH/b.tgz"; then ok archive-reproducible; else ko archive-reproducible; fi
-if cmp -s "$ACAT" "$CAT"; then ok build-matches-committed; else ko build-matches-committed; fi
+# contentHash and size depend on the toolchain's gzip; everything else must match the committed catalog.
+nogz() { jq -S 'del(.entries[].contentHash, .entries[].size)' "$1"; }
+if [[ "$(nogz "$ACAT")" == "$(nogz "$CAT")" ]]; then ok build-matches-committed; else ko build-matches-committed; fi
 
 # 4. Drift.
 D=$(copy edit)
@@ -64,9 +66,15 @@ expect drift:added-file 1 "$D" go run ./cmd/catalog check
 (cd "$D" && go run ./cmd/catalog build >/dev/null 2>&1) || :
 if jq -e '[.entries[0].contributions[].path] | index("extra.md")' "$D/catalog/catalog.json" >/dev/null; then ok drift:added-file-contributed; else ko drift:added-file-contributed; fi
 
+D=$(copy content-id)
+jq '.entries[0].contentId = "sha256:" + ("0" * 64)' "$D/catalog/catalog.json" >"$SCRATCH/c.json" && cp "$SCRATCH/c.json" "$D/catalog/catalog.json"
+expect drift:contentId 1 "$D" go run ./cmd/catalog check
+
+# Same contentId, other gzip bytes (another Go toolchain): a warning, not a failure.
 D=$(copy size)
 jq '.entries[0].size += 1' "$D/catalog/catalog.json" >"$SCRATCH/c.json" && cp "$SCRATCH/c.json" "$D/catalog/catalog.json"
-expect drift:size 1 "$D" go run ./cmd/catalog check
+expect toolchain:size-warns 0 "$D" go run ./cmd/catalog check
+if (cd "$D" && go run ./cmd/catalog check 2>&1) | grep -q '^WARN .*same contentId'; then ok toolchain:warning-printed; else ko toolchain:warning-printed; fi
 
 D=$(copy source)
 jq '.version = "0.1.1"' "$D/catalog/source.json" >"$SCRATCH/s.json" && cp "$SCRATCH/s.json" "$D/catalog/source.json"

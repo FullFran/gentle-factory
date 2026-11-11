@@ -55,7 +55,10 @@ func run(args []string, stderr io.Writer) int {
 		}
 	}
 	if args[0] == "check" {
-		probs := catalog.Check(dir)
+		probs, warnings := catalog.Check(dir)
+		for _, w := range warnings {
+			fmt.Fprintln(stderr, "WARN", w)
+		}
 		for _, p := range probs {
 			fmt.Fprintln(stderr, p)
 		}

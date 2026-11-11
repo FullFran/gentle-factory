@@ -317,19 +317,24 @@ func Validate(data []byte) (Catalog, []string) {
 
 // Check compares the committed catalog under root with an in-memory rebuild and
 // returns one line per problem; no problems means the catalog is up to date.
-func Check(root string) []string {
+//
+// contentId (the sha256 of the uncompressed tar) does not depend on the compressor, so a
+// difference in it is a problem. contentHash and size are of the gzip bytes, which depend
+// on the Go toolchain's compress/gzip: when only they differ and contentId matches, the
+// content is the same and the difference is reported as a warning, not a problem.
+func Check(root string) (probs, warnings []string) {
 	src, err := ReadSource(root)
 	if err != nil {
-		return []string{err.Error()}
+		return []string{err.Error()}, nil
 	}
 	data, err := os.ReadFile(filepath.Join(root, CatalogPath))
 	if err != nil {
-		return []string{err.Error()}
+		return []string{err.Error()}, nil
 	}
 	got, probs := Validate(data)
 	want, _, err := Build(src)
 	if err != nil {
-		return append(probs, err.Error())
+		return append(probs, err.Error()), nil
 	}
 	if got.ID != src.ID {
 		probs = append(probs, fmt.Sprintf("%s: id is %q, %s says %q", CatalogPath, got.ID, SourcePath, src.ID))
@@ -352,14 +357,17 @@ func Check(root string) []string {
 		if g.Version != w.Version {
 			diff("version", g.Version, w.Version)
 		}
-		if g.ContentHash != w.ContentHash {
-			diff("contentHash", g.ContentHash, w.ContentHash)
-		}
 		if g.ContentID != w.ContentID {
 			diff("contentId", g.ContentID, w.ContentID)
-		}
-		if g.Size != w.Size {
-			diff("size", g.Size, w.Size)
+			if g.ContentHash != w.ContentHash {
+				diff("contentHash", g.ContentHash, w.ContentHash)
+			}
+			if g.Size != w.Size {
+				diff("size", g.Size, w.Size)
+			}
+		} else if g.ContentHash != w.ContentHash || g.Size != w.Size {
+			warnings = append(warnings, fmt.Sprintf("%s: same contentId, but contentHash %s size %d differ from this toolchain's gzip (%s, %d)",
+				where, g.ContentHash, g.Size, w.ContentHash, w.Size))
 		}
 		if g.MediaType != w.MediaType {
 			diff("mediaType", g.MediaType, w.MediaType)
@@ -371,5 +379,5 @@ func Check(root string) []string {
 	if len(probs) > 0 {
 		probs = append(probs, "run: go run ./cmd/catalog build")
 	}
-	return probs
+	return probs, warnings
 }
