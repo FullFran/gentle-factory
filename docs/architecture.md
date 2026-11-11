@@ -317,7 +317,7 @@ flowchart TD
 
 The caps actually used are recorded in each receipt under `execution.caps`.
 
-**Caps in the design comment: accepted but not applied.** The design block may carry `gate_level` (`light|standard|full`), `budget_cap_usd`, `turn_cap` and `timeout_seconds`. `collect` validates `gate_level` and the schema validates the types, but `context.json` does not carry these values and nothing in `engine.go` reads them. The README states the same ("accepted, not yet applied"), and a search of `internal/` finds them only in `collect.go`'s `Design` struct. Today the only effective caps are the spec's.
+**Caps in the design comment: applied as ceilings.** The design block may carry `gate_level` (`light|standard|full`), `budget_cap_usd`, `turn_cap` and `timeout_seconds`. `collect` validates `gate_level` and the schema validates the types. `collect` copies the three caps into `context.json`, and `engine.go` applies them through `effectiveTurns`, `effectiveBudget` and `effectiveTimeout` (`spec.go`): for every node the effective cap is the smaller of the node's cap (or its default) and the design's cap, so a design can lower a cap but never raise it above the spec's. `budget_cap_usd` applies per agent node (passed as `--max-budget-usd` on each launch), not as a total for the run; `turn_cap` applies to agent nodes; `timeout_seconds` applies to agent and code nodes. The receipt records the caps that were enforced. `gate_level` is still not applied.
 
 ## 8. Back-pressure and slots
 
@@ -354,7 +354,7 @@ The design is the only specification. It is a comment on the issue with a machin
 | `expected_files` | yes | At least one entry. Normalised repo-relative paths or globs (`a/b.go`, `dir/*.sh`, `dir/**`). Rejected: absolute paths, `.` or `..` segments, `//`, and the protected prefixes `.factory/`, `.git/`, `odd/runs/`, `gates/`. A glob that happens to match a protected path still grants nothing: the protected-path guard wins. |
 | `issue` | no | If present it must equal the issue number. |
 | `gate_level` | no | `light`, `standard` or `full`. Validated, not applied. |
-| `budget_cap_usd`, `turn_cap`, `timeout_seconds` | no | Validated by the schema, not applied. |
+| `budget_cap_usd`, `turn_cap`, `timeout_seconds` | no | Validated by the schema. Applied as ceilings: each node uses the smaller of its own cap and the design's; never raises a cap. |
 | `slice` | no | Boolean, default `false`. See [section 11](#11-slices-part-of-versus-closes). |
 
 The block is strict: unknown fields are rejected (`additionalProperties: false`), so a misspelt key makes the issue `NOT_READY` instead of being ignored.
@@ -653,7 +653,7 @@ stateDiagram-v2
 
 Gaps in the code today:
 
-- Design-level `gate_level`, `budget_cap_usd`, `turn_cap` and `timeout_seconds` are accepted but not applied.
+- Design-level `gate_level` is accepted but not applied.
 - No `factory status` subcommand ([#43](https://github.com/FullFran/gentle-factory/issues/43) slice 2).
 - No `risk` node, consent policy, or author check on issue content ([#16](https://github.com/FullFran/gentle-factory/issues/16)).
 - No design-drift abort: the design hash is recorded, not re-checked mid-run.

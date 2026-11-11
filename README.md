@@ -211,7 +211,9 @@ failures, design decisions, retries, cost and duration per node across runs, and
 
 Not yet: Orca transport and the pi, codex and agy adapters (#2 scope comment), the
 stale-output reaper and stuck guard from the node contract §4.3, and the design's
-`gate_level`, `budget_cap_usd`, `turn_cap` and `timeout_seconds` (accepted, not yet applied).
+`gate_level` (accepted, not yet applied). The design's `budget_cap_usd`, `turn_cap` and
+`timeout_seconds` are applied as ceilings: each node runs with the smaller of its own cap and
+the design's, so a design never raises a cap above the spec's.
 
 ### Report a run (#15)
 

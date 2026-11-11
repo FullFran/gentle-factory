@@ -145,6 +145,8 @@ Maintainers copy and paste this template into a new issue comment when ready to 
 }
 -->
 
+<!-- Caps: each of `budget_cap_usd`, `turn_cap` and `timeout_seconds` lowers the spec's per-node cap; a value above the spec has no effect; `budget_cap_usd` is per agent node, not a total for the run. -->
+
 ## 1. Goal & Context
 <!-- One or two sentences describing what is being built and why. -->
 

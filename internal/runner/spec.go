@@ -70,6 +70,30 @@ func (n *Node) timeout(def int) int {
 	return def
 }
 
+// The design caps (#51) are ceilings: the effective cap is the smaller of the node's cap and
+// the design's, so a design can lower a cap but never raise it. A nil context or cap keeps the node's.
+
+func effectiveTurns(n *Node, c *Context) int {
+	if c != nil && c.TurnCap != nil {
+		return min(n.maxTurns(), *c.TurnCap)
+	}
+	return n.maxTurns()
+}
+
+func effectiveBudget(n *Node, c *Context) float64 {
+	if c != nil && c.BudgetCapUSD != nil {
+		return min(n.maxBudget(), *c.BudgetCapUSD)
+	}
+	return n.maxBudget()
+}
+
+func effectiveTimeout(n *Node, c *Context, def int) int {
+	if c != nil && c.TimeoutSeconds != nil {
+		return min(n.timeout(def), *c.TimeoutSeconds)
+	}
+	return n.timeout(def)
+}
+
 // Spec is a factory definition: nodes in order plus run-wide settings.
 type Spec struct {
 	Factory        string   `json:"factory"`
@@ -91,7 +115,11 @@ type Context struct {
 	DesignFile    string   `json:"design_file,omitempty"`
 	IssueFile     string   `json:"issue_file,omitempty"`
 	Slice         bool     `json:"slice"`
-	path          string
+	// Design caps (#51): ceilings that lower each node's caps, never raise them.
+	BudgetCapUSD   *float64 `json:"budget_cap_usd,omitempty"`
+	TurnCap        *int     `json:"turn_cap,omitempty"`
+	TimeoutSeconds *int     `json:"timeout_seconds,omitempty"`
+	path           string
 }
 
 type IssueRef struct {
