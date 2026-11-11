@@ -51,6 +51,10 @@ Usage:
       logs, commands or absolute paths. Exit 2 on missing receipts or context.
   factory summary [--repo REPO] [--runs-dir DIR] [--json]
       Which node fails, retries or costs the most across runs.
+  factory status [--json]
+      Print the status file written by start and watch
+      (${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json) as JSON or as a
+      short summary. Never reads receipts. Exit 1 when the file is missing or invalid.
   factory panel [--addr 127.0.0.1:8787] [--runs-dir DIR ...] [--spec FILE] [--allow-remote]
       Serve a read-only web panel and JSON API over receipt stores (repeatable
       --runs-dir, default the archive of "start"): runs with their status, a graph
@@ -90,15 +94,17 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		code, err = cmdSummary(args[1:], stdout, stderr)
 	case "panel":
 		code, err = cmdPanel(args[1:], stdout, stderr)
+	case "status":
+		code, err = cmdStatus(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want collect, run, start, watch, report, summary or panel)", args[0])
+		err = specErr("unknown command %q (want collect, run, start, watch, report, summary, panel or status)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
 		}
 		label := "RUN"
-		if args[0] == "start" || args[0] == "watch" || args[0] == "panel" {
+		if args[0] == "start" || args[0] == "watch" || args[0] == "panel" || args[0] == "status" {
 			label = strings.ToUpper(args[0])
 		}
 		fmt.Fprintf(stderr, "%s: status=MISCONFIGURED reason=%s\n", label, strings.Join(strings.Fields(err.Error()), " "))

@@ -2,8 +2,11 @@ package runner
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -358,4 +361,100 @@ func recordRun(path string, out io.Writer, r runRecord) {
 		}
 		s.Today.TotalCostUSD += r.TotalCostUSD
 	})
+}
+
+// cmdStatus prints the status file as JSON or as a short summary. It reads that one file and
+// nothing else (never receipts) and never writes.
+func cmdStatus(args []string, stdout, stderr io.Writer) (int, error) {
+	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "print the status file as JSON")
+	if err := fs.Parse(args); err != nil {
+		return 0, err
+	}
+	if fs.NArg() > 0 {
+		return 0, specErr("status takes no positional arguments")
+	}
+	state, err := xdgDir("XDG_STATE_HOME", filepath.Join(".local", "state"))
+	if err != nil {
+		return 0, err
+	}
+	data, err := os.ReadFile(statusPathFor(state))
+	if errors.Is(err, iofs.ErrNotExist) {
+		fmt.Fprintln(stderr, "STATUS: status=MISSING reason=no status file")
+		return exitStopped, nil
+	}
+	s := &factoryStatus{}
+	if err != nil || decodeStrictBytes(data, s) != nil || s.SchemaVersion != statusVersion {
+		fmt.Fprintln(stderr, "STATUS: status=INVALID reason=unreadable or unknown status file")
+		return exitStopped, nil
+	}
+	if *asJSON {
+		out, _ := json.MarshalIndent(s, "", "  ")
+		fmt.Fprintln(stdout, string(out))
+		return exitOK, nil
+	}
+	writeStatusSummary(stdout, s)
+	return exitOK, nil
+}
+
+func dashIfEmpty(v string) string {
+	if v == "" {
+		return "-"
+	}
+	return v
+}
+
+// writeStatusSummary prints the human summary of a status file, values as stored.
+func writeStatusSummary(w io.Writer, s *factoryStatus) {
+	fmt.Fprintf(w, "updated %s\n", s.UpdatedAt)
+	if wa := s.Watcher; wa != nil {
+		fmt.Fprintf(w, "watcher: started %s, last pass %s, slots %d/%d, repos %s\n",
+			wa.StartedAt, dashIfEmpty(wa.LastPassAt), wa.SlotsBusy, wa.Slots, strings.Join(wa.Repositories, " "))
+	} else {
+		fmt.Fprintln(w, "watcher: not running")
+	}
+	if c := s.CurrentRun; c != nil {
+		attempt := "-"
+		if c.Attempt != 0 {
+			attempt = strconv.Itoa(c.Attempt)
+		}
+		fmt.Fprintf(w, "current: %s#%d run %s node %s (%s) attempt %s\n",
+			c.Repository, c.Issue, c.RunID, dashIfEmpty(c.NodeID), dashIfEmpty(c.NodeKind), attempt)
+	} else {
+		fmt.Fprintln(w, "current: none")
+	}
+	var queued []string
+	for _, q := range s.Queue {
+		for _, n := range q.Issues {
+			queued = append(queued, fmt.Sprintf("%s#%d", q.Repository, n))
+		}
+	}
+	if len(queued) == 0 {
+		fmt.Fprintln(w, "queue: empty")
+	} else {
+		fmt.Fprintf(w, "queue: %s\n", strings.Join(queued, " "))
+	}
+	t := s.Today
+	fmt.Fprintf(w, "today %s: %d runs, %d complete, %d stopped, $%.2f\n",
+		dashIfEmpty(t.Date), t.Runs, t.Completed, t.Stopped, t.TotalCostUSD)
+	if len(s.LastRuns) == 0 {
+		fmt.Fprintln(w, "last runs: none")
+		return
+	}
+	fmt.Fprintln(w, "last runs:")
+	for i, r := range s.LastRuns {
+		if i == 5 {
+			break
+		}
+		line := fmt.Sprintf("  %s %s#%d %s", r.FinishedAt, r.Repository, r.Issue, r.Status)
+		if r.StopCode != "" {
+			line += " " + r.StopCode
+		}
+		line += fmt.Sprintf(" $%.2f", r.TotalCostUSD)
+		if r.PRNumber > 0 {
+			line += fmt.Sprintf(" PR #%d", r.PRNumber)
+		}
+		fmt.Fprintln(w, line)
+	}
 }
