@@ -14,8 +14,12 @@ validator=()
 if command -v check-jsonschema >/dev/null 2>&1; then validator=(check-jsonschema)
 elif command -v uvx >/dev/null 2>&1; then validator=(uvx -q check-jsonschema); fi
 
+# The pre-existing scenarios must not export traces to whatever collector the caller has.
+unset OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_PROTOCOL OTEL_EXPORTER_OTLP_HEADERS
+
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/gentle-factory-runner-test.XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
+receiver_pids=()
+trap '[ "${#receiver_pids[@]}" -gt 0 ] && kill "${receiver_pids[@]}" 2>/dev/null; rm -rf "$scratch"' EXIT
 factory="$scratch/factory"
 (cd "$here" && go build -o "$factory" ./cmd/factory) || { printf 'FAIL go build\n'; exit 1; }
 pass=0
@@ -536,6 +540,50 @@ EOF
 run "$(new_repo model-bad)" "$scratch/spec-model-bad.json"
 check "model: an invalid model is a spec error" \
   '[ "$code" = 2 ] && grep -q "RUN: status=MISCONFIGURED" <<<"$out" && grep -q "agent node fast: model" <<<"$out" && ! grep -q "unknown field" <<<"$out" && [ ! -s "$FAKE_LOG" ]'
+
+# --- otlp ---------------------------------------------------------------------
+
+(cd "$here" && go build -o "$scratch/otlp-receiver" ./tests/otlp-receiver) || { printf 'FAIL go build otlp-receiver\n'; exit 1; }
+start_receiver() { # start_receiver FILE -> sets receiver_port and receiver_pid
+  local stdout="$scratch/receiver-$RANDOM.out"
+  "$scratch/otlp-receiver" "$1" >"$stdout" 2>&1 &
+  receiver_pid=$!
+  receiver_pids+=("$receiver_pid")
+  receiver_port=""
+  for _ in $(seq 1 100); do
+    receiver_port="$(sed -n 's/^LISTEN //p' "$stdout")"
+    [ -n "$receiver_port" ] && return 0
+    sleep 0.05
+  done
+  return 1
+}
+otlp_body() { cut -d' ' -f4- "$scratch/otlp.lines"; }
+: >"$scratch/otlp.lines"
+start_receiver "$scratch/otlp.lines" || { printf 'FAIL otlp receiver did not start\n'; exit 1; }
+
+repo="$(new_repo otlp)"
+OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:$receiver_port/" run "$repo" "$scratch/spec.json"
+check "otlp: a run exports one trace with a span per node attempt" \
+  '[ "$code" = 0 ] && grep -q "RUN: status=COMPLETE" <<<"$out" && ! grep -q "^OTLP:" <<<"$out" &&
+   [ "$(wc -l <"$scratch/otlp.lines" | tr -d " ")" = 1 ] &&
+   [ "$(cut -d" " -f1-3 "$scratch/otlp.lines")" = "POST /v1/traces application/json" ] &&
+   [ "$(otlp_body | jq "[.resourceSpans[].scopeSpans[].spans[]] | length")" = 3 ] &&
+   [ "$(otlp_body | jq -r "[.resourceSpans[].scopeSpans[].spans[] | select(has(\"parentSpanId\") | not) | .name] | join(\",\")")" = "invoke_workflow test" ] &&
+   root="$(otlp_body | jq -r ".resourceSpans[].scopeSpans[].spans[] | select(has(\"parentSpanId\") | not) | .spanId")" &&
+   [ "$(otlp_body | jq -r --arg r "$root" "[.resourceSpans[].scopeSpans[].spans[] | select(.parentSpanId == \$r) | .spanId] | join(\",\")")" = "$(receipt "$repo" 1 | jq -r .telemetry.span_id),$(receipt "$repo" 2 | jq -r .telemetry.span_id)" ] &&
+   [ "$(otlp_body | jq -r "[.resourceSpans[].scopeSpans[].spans[] | .traceId] | unique | join(\",\")")" = "$(receipt "$repo" 1 | jq -r .telemetry.trace_id)" ]'
+
+: >"$scratch/otlp.lines"
+run "$(new_repo otlp-none)" "$scratch/spec.json"
+check "otlp: no endpoint, no export" \
+  '[ "$code" = 0 ] && grep -q "RUN: status=COMPLETE" <<<"$out" && ! grep -q "OTLP" <<<"$out" && [ ! -s "$scratch/otlp.lines" ]'
+
+start_receiver "$scratch/otlp-closed.lines" || { printf 'FAIL otlp receiver did not start\n'; exit 1; }
+closed_port="$receiver_port"
+kill "$receiver_pid" 2>/dev/null; wait "$receiver_pid" 2>/dev/null
+OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:$closed_port/" run "$(new_repo otlp-down)" "$scratch/spec.json"
+check "otlp: endpoint down, the run completes with one warning" \
+  '[ "$code" = 0 ] && grep -q "RUN: status=COMPLETE" <<<"$out" && [ "$(grep -c "^OTLP: export failed:" <<<"$out")" = 1 ]'
 
 printf 'RESULT: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" = 0 ]

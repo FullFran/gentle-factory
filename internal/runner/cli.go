@@ -119,6 +119,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) (int, error) {
 	if a.spec == "" || a.repo == "" || a.context == "" || fs.NArg() > 0 {
 		return 0, specErr("run needs --spec, --repo and --context and no positional arguments")
 	}
+	a.stderr = stderr
 	return runFactory(a, stdout)
 }
 
