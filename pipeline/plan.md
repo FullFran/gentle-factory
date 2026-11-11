@@ -13,6 +13,8 @@ Write a short implementation plan against the design's "Done when" criteria:
 2. The exact edits, one bullet per file. Only files the design lists as expected files.
 3. The test you will add or change first (it must fail before the fix), and how it fails today.
 4. The commands that prove the design's "done when" and the repository's own checks you found.
+   Mark a repository check "not runnable here" when a tool it needs is missing in this
+   environment (`command -v <tool>` fails); the implementer lists it under "Not run here".
 
 Rules:
 - Do not invent requirements the design does not state. If the design is silent on a

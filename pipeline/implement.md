@@ -5,7 +5,10 @@ Do this:
 1. Write the failing test first and run it to see it fail.
 2. Make the smallest change that makes it pass. Edit only the design's expected files.
 3. Run the design's "done when" command and the repository's own checks named in the plan;
-   all must pass.
+   all must pass. A repository check that cannot start here because a tool it needs is missing
+   (exit 126 or 127, "command not found", or the check's own skip status such as 77) is not a
+   failure: list it once under "Not run here" with the missing tool, and do not install the tool
+   or work around it. This never applies to the "done when" command: it must run and pass.
 4. If behavior that users see changed, update the matching doc only when it is an expected file.
 
 Rules:
