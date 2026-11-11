@@ -136,6 +136,8 @@ claude -p \
   --output-format json
 ```
 
+An agent node may set an optional `model` member. It is allowed on agent nodes only and is passed to the engine as is, as `--model <value>`; the runner keeps no list of known models. When `model` is unset, no flag is added and the engine uses its default model. A `model` on a non-agent node, or a value that does not match `^[A-Za-z0-9][A-Za-z0-9._\[\]:-]*$`, is a spec error (exit 2).
+
 The runner supplies the environment variable `TRACEPARENT` conforming to W3C Trace Context specifications, which Claude Code propagates into its execution traces.
 
 The output JSON provides structured operational metrics:

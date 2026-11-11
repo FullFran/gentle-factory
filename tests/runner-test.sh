@@ -515,5 +515,27 @@ run "$repo" "$scratch/spec.json"
 check "spec: a new run refuses a dirty target tree" '[ "$code" = 2 ] && grep -q "uncommitted changes" <<<"$out"'
 check "portability: no laptop paths in the runner" '! grep -rnE "/home/|/Users/|~/" "$here/cmd" "$here/internal"'
 
+# --- model -------------------------------------------------------------------
+
+cat >"$scratch/spec-model.json" <<'EOF'
+{"factory": "test", "nodes": [
+  {"id": "fast", "kind": "agent", "prompt_file": "implement.md", "model": "sonnet"},
+  {"id": "plain", "kind": "agent", "prompt_file": "implement.md"}
+]}
+EOF
+: >"$FAKE_LOG"
+run "$(new_repo model)" "$scratch/spec-model.json"
+check "model: a node model reaches the engine and an unset model adds no flag" \
+  '[ "$code" = 0 ] && grep "^ARGV:" "$FAKE_LOG" | sed -n 1p | grep -qF "[--no-session-persistence] [--model] [sonnet]" && [ "$(grep -c "^ARGV:" "$FAKE_LOG")" = 2 ] && ! grep "^ARGV:" "$FAKE_LOG" | sed -n 2p | grep -qF "[--model]"'
+cat >"$scratch/spec-model-bad.json" <<'EOF'
+{"factory": "test", "nodes": [
+  {"id": "fast", "kind": "agent", "prompt_file": "implement.md", "model": "--dangerously-skip-permissions"}
+]}
+EOF
+: >"$FAKE_LOG"
+run "$(new_repo model-bad)" "$scratch/spec-model-bad.json"
+check "model: an invalid model is a spec error" \
+  '[ "$code" = 2 ] && grep -q "RUN: status=MISCONFIGURED" <<<"$out" && grep -q "agent node fast: model" <<<"$out" && ! grep -q "unknown field" <<<"$out" && [ ! -s "$FAKE_LOG" ]'
+
 printf 'RESULT: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" = 0 ]

@@ -148,6 +148,9 @@ func claudeCommand(node *Node) (cmd, tools []string) {
 		"--max-turns", strconv.Itoa(node.maxTurns()),
 		"--max-budget-usd", strconv.FormatFloat(node.maxBudget(), 'f', -1, 64),
 		"--no-session-persistence"}
+	if node.Model != "" {
+		cmd = append(cmd, "--model", node.Model)
+	}
 	if len(tools) > 0 {
 		cmd = append(append(cmd, "--allowedTools"), tools...)
 	}

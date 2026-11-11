@@ -27,6 +27,7 @@ var (
 	defaultProtected = []string{"odd/runs/", ".factory/", "gates/"}
 	nodeIDRe         = regexp.MustCompile(`^[a-z0-9_-]+$`)
 	runIDRe          = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+	modelRe          = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\[\]:-]*$`)
 )
 
 // Node is one step of a factory.
@@ -36,6 +37,7 @@ type Node struct {
 	Engine         string   `json:"engine,omitempty"`
 	Role           string   `json:"role,omitempty"`
 	PromptFile     string   `json:"prompt_file,omitempty"`
+	Model          string   `json:"model,omitempty"`
 	Tools          []string `json:"tools,omitempty"`
 	Deny           []string `json:"deny,omitempty"`
 	ReadOnly       bool     `json:"read_only,omitempty"`
@@ -153,9 +155,15 @@ func loadSpec(path string) (*Spec, error) {
 			if len(node.Command) == 0 {
 				return nil, specErr("code node %s needs a non-empty command list", node.ID)
 			}
+			if node.Model != "" {
+				return nil, specErr("node %s: model is only allowed on agent nodes", node.ID)
+			}
 		case "agent":
 			if node.Engine != "" && node.Engine != "claude" {
 				return nil, specErr("agent node %s: only engine 'claude' is supported", node.ID)
+			}
+			if node.Model != "" && !modelRe.MatchString(node.Model) {
+				return nil, specErr("agent node %s: model must match %s", node.ID, modelRe)
 			}
 			if node.PromptFile == "" {
 				return nil, specErr("agent node %s needs prompt_file", node.ID)

@@ -129,7 +129,10 @@ Behavior:
 - **Agent nodes** run `claude -p --output-format stream-json --verbose` with the prompt on stdin, the
   node's `tools` as `--allowedTools`, and `--disallowedTools` for `git push`, `git tag`,
   `git reset`, `gh` plus the node's `deny`. A `read_only` agent also loses `Edit`,
-  `Write`, `NotebookEdit` and `git commit`. Cost, turns, tokens and model come from
+  `Write`, `NotebookEdit` and `git commit`. An optional `model` member, allowed on agent
+  nodes only, is passed to the engine as is as `--model <value>`; unset means the engine's
+  default model. A `model` on a non-agent node or one that does not match
+  `^[A-Za-z0-9][A-Za-z0-9._\[\]:-]*$` is a spec error. Cost, turns, tokens and model come from
   the stream's final `result` event; the agent's final text is the receipt's `notes`. The node
   log keeps the whole stream, so a node stopped by `timeout_seconds` still shows what the agent
   did, and its receipt notes name the number of turns and the last tool call (#30).
