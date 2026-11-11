@@ -89,7 +89,7 @@ The receipt predicate is defined in [schemas/receipt.schema.json](../../schemas/
    - `tools_allowed`: Array of tool permissions granted to the node.
    - `caps`: Limits enforced (`max_turns`, `max_budget_usd`, `timeout_seconds`).
 5. **Telemetry (`telemetry`)**:
-   - OpenTelemetry GenAI semantic convention fields: `gen_ai_system`, `request_model`, `tokens` (`input_tokens`, `output_tokens`, `total_tokens`).
+   - OpenTelemetry GenAI semantic convention fields: `gen_ai_system`, `request_model`, `tokens` (`input_tokens`, optional `cache_read_input_tokens` and `cache_creation_input_tokens`, `output_tokens`, `total_tokens`). `input_tokens` includes cache reads and cache writes, summed over every turn of the attempt; the two optional cache members break that total down.
    - Trace context: `trace_id`, `span_id`, `traceparent`.
    - Runner metrics: `total_cost_usd`, `num_turns`, `duration_ms`.
 6. **Outcome (`outcome`)**:

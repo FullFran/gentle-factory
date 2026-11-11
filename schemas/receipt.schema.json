@@ -282,6 +282,16 @@
                   "type": "integer",
                   "minimum": 0
                 },
+                "cache_read_input_tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Input tokens read from the prompt cache, summed over every turn. Included in input_tokens."
+                },
+                "cache_creation_input_tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Input tokens written to the prompt cache, summed over every turn. Included in input_tokens."
+                },
                 "output_tokens": {
                   "type": "integer",
                   "minimum": 0
