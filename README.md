@@ -23,9 +23,11 @@ This repository is an HCS catalog root in the metaharness layout, composed with 
 
 | Path | Contents |
 |---|---|
-| `catalog/` | generated HCS-0001 catalog |
-| `packages/` | one folder per package (node, run adapter, gate) |
+| `catalog/` | generated HCS-0001 catalog of the embedded pipeline |
+| `packages/` | not yet: one folder per package (node, run adapter, gate) |
 | `pipeline/` | the one repository-agnostic pipeline: spec, prompts and code nodes |
+
+Build and check the catalog with `go run ./cmd/catalog build|check`: see [catalog/README.md](catalog/README.md).
 
 ## Prove a regression test
 
