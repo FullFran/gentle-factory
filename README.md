@@ -112,7 +112,9 @@ commands run from the target root and may use `{repo}`, `{base_commit}`,
 The context file holds the references every receipt carries and the runner never fetches:
 `repository`, `issue` (`number`, `url`), `design_comment` (`id`, `url`, `sha256`, `updated_at`)
 and an optional `task_id` (default `<repository>#<issue>`). `collect` also writes
-`done_when`, `expected_files`, `design_file` and `issue_file` (paths relative to the context file).
+`done_when`, `expected_files`, `design_file` and `issue_file` (paths relative to the context file),
+and `slice` (the design's value, or `false`); when `slice` is `true` the output node's draft PR
+says `Part of #<issue>` instead of `Closes #<issue>`, so merging it does not close the issue.
 
 **Collect (design gate, #3):** `collect` reads the issue with `gh`, requires the
 `factory:ready` label and the latest comment with a `<!-- factory-design:v1 {...} -->`

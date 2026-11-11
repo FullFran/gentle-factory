@@ -100,6 +100,11 @@ echo '[{"url":"https://github.com/FullFran/bifrost/pull/99"}]' >"$scratch/existi
 : >"$FAKE_GH_CALLS"
 out="$(cd "$co" && FAKE_GH_EXISTING="$scratch/existing.json" bash "$layer/open-pr.sh" "$run_dir" "$base" 2>&1)"; code=$?
 check "output: on resume an open PR is reused, not duplicated" '[ "$code" = 0 ] && ! grep -q "^pr create" "$FAKE_GH_CALLS" && grep -q "already open" <<<"$out"'
+jq '.slice = true' "$FACTORY_CONTEXT_FILE" >"$scratch/ctx/slice.json"
+: >"$FAKE_GH_CALLS"
+out="$(cd "$co" && FACTORY_CONTEXT_FILE="$scratch/ctx/slice.json" bash "$layer/open-pr.sh" "$run_dir" "$base" 2>&1)"; code=$?
+check "output: a slice PR says Part of the issue and does not close it" \
+  '[ "$code" = 0 ] && grep -q "^pr create" "$FAKE_GH_CALLS" && grep -q "^Part of #7$" "$FAKE_GH_BODY" && ! grep -q "Closes #7" "$FAKE_GH_BODY"'
 
 # Prompt and design-template guidance learned from the first unattended runs.
 template="$here/docs/design/design-comment-template.md"

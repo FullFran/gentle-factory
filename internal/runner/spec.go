@@ -90,6 +90,7 @@ type Context struct {
 	ExpectedFiles []string `json:"expected_files,omitempty"`
 	DesignFile    string   `json:"design_file,omitempty"`
 	IssueFile     string   `json:"issue_file,omitempty"`
+	Slice         bool     `json:"slice"`
 	path          string
 }
 
