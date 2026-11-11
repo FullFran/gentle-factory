@@ -6,6 +6,8 @@ The long-term goal is to list it on gentlehub so the gentle-ai community can use
 
 Design: [#1](https://github.com/FullFran/gentle-factory/issues/1) (moved from FullFran/metaharness).
 
+Architecture, flow, components and lifecycles in detail: [docs/architecture.md](docs/architecture.md).
+
 ## Direction
 
 - **Own harness, no external workflow engine.** Pieces are HCS packages; a factory is a composition of them.
