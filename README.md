@@ -184,6 +184,18 @@ Behavior:
   `execution.engine` (the wrapped command's name), the issue and
   `telemetry.trace_id` in the node's receipt, so the run stays attributable from
   receipts even with no telemetry from the engine itself.
+- **Trace export (#13):** with `OTEL_EXPORTER_OTLP_ENDPOINT` set (a base URL),
+  `factory run` posts the attempts it executed as one OTLP/HTTP JSON trace to
+  `<endpoint>/v1/traces` when it ends, whatever the run status: an
+  `invoke_workflow <factory>` root and one `invoke_agent <node>` or
+  `execute_tool <node>` span per attempt, with the receipt's span ids, tokens, cost
+  and outcome (OpenTelemetry GenAI conventions; pin and mapping in
+  `docs/design/receipt-format.md` §5.1). No prompts, outputs, commands or paths are
+  exported. With the endpoint unset or empty nothing is sent and the output is
+  unchanged. `OTEL_EXPORTER_OTLP_PROTOCOL` other than `http/json` skips the export
+  with one stderr line `OTLP: export skipped: only http/json is supported`. An
+  unreachable endpoint or a non-2xx answer prints one stderr line
+  `OTLP: export failed: ...`; the exit code and `RUN:` lines do not change.
 
 The store is `<repo>/odd/runs/<run_id>/` (`receipts/`, `logs/`, `feedback/`, `outputs/`), or `--runs-dir`.
 The runner adds it to `.git/info/exclude`, so it never shows up in `git status` and

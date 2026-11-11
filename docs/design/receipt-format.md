@@ -493,6 +493,28 @@ The receipt serves as the immutable handoff between workflow nodes:
 3. **Trace Continuation**:
    Node `N+1` inherits the `trace_id` and W3C `traceparent` from node `N`, ensuring distributed traces remain unified across the entire factory run.
 
+### 5.1 OTLP Trace Export (#13)
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, `factory run` posts the node attempts of the invocation as one OTLP/HTTP JSON `ExportTraceServiceRequest` to `<endpoint>/v1/traces` once the invocation ends, whatever the run status. A receipt and its span are the same thing: the span's `traceId` and `spanId` are the receipt's `telemetry.trace_id` and `telemetry.span_id`, and its duration is `telemetry.duration_ms`. Receipts themselves do not change.
+
+Pinned versions (the GenAI conventions are in development stability):
+
+- GenAI semantic conventions: `open-telemetry/semantic-conventions-genai@e713f345c1d5f6d888b2f3bbddf1a863395b784c` (development stability).
+- OpenTelemetry semantic conventions: v1.45.0.
+- OTLP: 1.11.1 (JSON encoding over HTTP).
+
+Mapping:
+
+| Span | Name | Attributes (only when the receipt has the value) |
+|---|---|---|
+| Resource | — | `service.name` = `factory-<factory>`, `factory.name`, `run.id`, `task.id`; scope `gentle-factory` |
+| Invocation (root) | `invoke_workflow <factory>` | `gen_ai.operation.name` = `invoke_workflow`; `spanId` = parent id of the `TRACEPARENT` given to the nodes of this invocation |
+| Agent node attempt | `invoke_agent <node_id>` | `gen_ai.operation.name` = `invoke_agent`, `gen_ai.agent.name` = node id, `gen_ai.provider.name` = `telemetry.gen_ai_system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `factory.total_cost_usd` (double) |
+| Code node attempt | `execute_tool <node_id>` | `gen_ai.operation.name` = `execute_tool`, `gen_ai.tool.name` = node id, `factory.exit_code` |
+| Both node kinds | — | `factory.attempt`, `factory.outcome.status`; when the status is not `success`, `error.type` = `outcome.terminal_reason` and span status code `2` (error) |
+
+No attribute carries `execution.command`, `notes`, logs, prompts, outputs or file paths. A resumed run exports a new root for the new invocation in the same trace; attempts of earlier invocations are not exported again.
+
 ---
 
 ## 6. External References & Verification Status
@@ -501,6 +523,7 @@ The receipt serves as the immutable handoff between workflow nodes:
 |---|---|---|---|
 | **in-toto Attestation Framework** | Statement v1.0 schema & Link model | VERIFIED | https://github.com/in-toto/attestation/blob/main/spec/v1.0/statement.md |
 | **OpenTelemetry GenAI** | Semantic conventions for model, tokens, cost | VERIFIED | https://opentelemetry.io/docs/specs/semconv/gen-ai/ |
+| **OpenTelemetry GenAI (pinned)** | `invoke_workflow`, `invoke_agent`, `execute_tool` spans and attributes | PINNED | `open-telemetry/semantic-conventions-genai@e713f345c1d5f6d888b2f3bbddf1a863395b784c` (development stability); semantic-conventions v1.45.0; OTLP 1.11.1 |
 | **W3C Trace Context** | `traceparent` header specification | VERIFIED | https://www.w3.org/TR/trace-context/ |
 | **CNCF CloudEvents** | CloudEvents v1.0.2 event envelope specification | VERIFIED | https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md |
 | **JSON Schema 2020-12** | Core specification and vocabulary | VERIFIED | https://json-schema.org/draft/2020-12/schema |

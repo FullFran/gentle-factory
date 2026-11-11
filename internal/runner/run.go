@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -28,6 +29,7 @@ type runCtx struct {
 	protected                                         []string
 	store                                             *Store
 	out                                               io.Writer
+	attempts                                          []spanAttempt // node attempts of this invocation, for the OTLP export
 }
 
 func randomHex(n int) string {
@@ -109,6 +111,7 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 	fmt.Fprintf(rc.out, "NODE: id=%s attempt=%d kind=%s\n", node.ID, attempt, node.Kind)
 
 	var res *result
+	start := time.Now()
 	if node.Kind == "agent" {
 		res = runAgent(rc, node, attempt, feedback, feedbackFile, upstream)
 		if rc.engineVersion == "" {
@@ -171,6 +174,7 @@ func execute(rc *runCtx, node *Node, receipts []*Predicate, feedback string) (*P
 	if err := rc.store.append(st); err != nil {
 		return nil, nil, err
 	}
+	rc.attempts = append(rc.attempts, spanAttempt{p: &st.Predicate, start: start})
 	fmt.Fprintf(rc.out, "NODE: id=%s attempt=%d status=%s reason=%s duration_ms=%d\n",
 		node.ID, attempt, res.status, res.terminalReason, res.durationMS)
 	return &st.Predicate, res, nil
@@ -181,9 +185,13 @@ func (rc *runCtx) stop(nodeID, reason, detail string) int {
 	return exitStopped
 }
 
-type runArgs struct{ spec, repo, context, runID, runsDir string }
+type runArgs struct {
+	spec, repo, context, runID, runsDir string
+	stderr                              io.Writer // OTLP export warnings; nil disables the export
+}
 
 func runFactory(a runArgs, out io.Writer) (int, error) {
+	start := time.Now()
 	spec, err := loadSpec(a.spec)
 	if err != nil {
 		return 0, err
@@ -247,6 +255,10 @@ func runFactory(a runArgs, out io.Writer) (int, error) {
 		branch: strings.TrimSpace(branch), traceID: traceID,
 		traceparent: fmt.Sprintf("00-%s-%s-01", traceID, randomHex(8)),
 		context:     context, protected: spec.ProtectedPaths, store: store, out: out}
+	if a.stderr != nil {
+		// Whatever the run status: every return below has written its last receipt.
+		defer func() { exportTrace(rc, rc.attempts, start, time.Now(), a.stderr) }()
+	}
 	fmt.Fprintf(out, "RUN: id=%s factory=%s task=%s runs_dir=%s\n", runID, spec.Factory, context.TaskID, runsDir)
 
 	byID := map[string]*Node{}
