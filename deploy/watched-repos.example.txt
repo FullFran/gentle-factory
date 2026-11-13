@@ -1,0 +1,7 @@
+# Example of the list read by `factory watch --repos-file`: copy it to
+# ~/.config/gentle-factory/watched-repos.txt and replace these entries with your repositories.
+# One OWNER/NAME per line; blank lines and # comments are ignored.
+# The real list is deployment configuration and is not kept in this repository (deploy/README.md).
+# Read once at watcher start: restart the unit after an edit.
+example-org/service-api
+example-org/web-app  # trailing comments are allowed
