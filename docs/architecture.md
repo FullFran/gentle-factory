@@ -146,6 +146,7 @@ The CLI is `cmd/factory/main.go` calling `runner.Main` in `internal/runner/cli.g
 | Subcommand | What it does | Exit codes |
 |---|---|---|
 | `collect --repo OWNER/NAME --issue N --checkout DIR --out DIR` | The design gate. Reads the issue with `gh`, requires the label `factory:ready` and a valid design comment, runs `done_when` on the base (it must fail), writes `context.json`, `design.md`, `issue.md`, and creates branch `factory/N`. | 0 ready, 1 `NOT_READY`, 2 misconfigured |
+| `design check FILE [--repo-dir DIR] [--issue N]` | Verifies a design comment saved in a local file before `factory:ready`, without `gh`: the block checks of `collect`, the closing ambiguity line and, with `--repo-dir` (a clean checkout of the default branch, restored afterwards), that `done_when` fails (`DESIGN: check=done_when status=RED exit=N`). Last line `DESIGN: status=VALID file=FILE expected_files=K done_when=RED\|UNCHECKED` or `DESIGN: status=INVALID reason=...`. | 0 valid, 1 `INVALID`, 2 misconfigured |
 | `run --spec SPEC --repo REPO --context CONTEXT [--run-id ID] [--runs-dir DIR]` | Runs the nodes of a spec against a target git repository. With `--run-id` it resumes. | 0 complete, 1 stopped, 2 invalid spec, context, arguments or repository |
 | `start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]` | One issue, whole lifecycle: lock, clone, collect, run, archive receipts, report, delete the clone. | 0 complete, 1 stopped or not ready, 2 misconfigured |
 | `watch --repo OWNER/NAME [--repo ...] [--interval S] [--slots N] [--max-open-prs N] [--once]` | Polls for `factory:ready` issues and starts them like `start`. | 0, or 1 when another watcher holds the lock, 2 on a failed `--once` pass |
@@ -153,7 +154,7 @@ The CLI is `cmd/factory/main.go` calling `runner.Main` in `internal/runner/cli.g
 | `summary [--repo REPO] [--runs-dir DIR] [--json]` | Per node: attempts, failures, decisions, retries, cost, duration, plus a `MOST:` line (which node fails, retries and costs the most). | 0 |
 | `panel [--addr 127.0.0.1:8787] [--runs-dir DIR ...] [--spec FILE] [--allow-remote]` | A local, read-only web UI and JSON API over receipt stores. | 0, 2 on a non-loopback address without `--allow-remote` |
 
-Machine-readable output lines are stable and are what tests and the other tools read: `NODE: ...`, `RETRY: ...`, `RUN: status=COMPLETE|STOPPED ...`, `START: status=... issue=... run=... archive=...`, `COLLECT: status=READY|NOT_READY ...`, `REPORT: status=posted|already-posted ...`, `WATCH: ...`, `PANEL: url=...`.
+Machine-readable output lines are stable and are what tests and the other tools read: `NODE: ...`, `RETRY: ...`, `RUN: status=COMPLETE|STOPPED ...`, `START: status=... issue=... run=... archive=...`, `COLLECT: status=READY|NOT_READY ...`, `DESIGN: status=VALID|INVALID ...`, `REPORT: status=posted|already-posted ...`, `WATCH: ...`, `PANEL: url=...`.
 
 Environment variables the binary reads:
 
@@ -166,7 +167,7 @@ Environment variables the binary reads:
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Base URL; when set, `run` exports a trace at the end ([section 12](#12-run-artefacts-and-observability)). |
 | `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` | Move the work root, the archive and the status file. |
 
-There is **no** `factory status` subcommand yet. The issue that asked for it ([#43](https://github.com/FullFran/gentle-factory/issues/43), slice 2) is still open, and `cli.go` dispatches only the seven commands above.
+There is **no** `factory status` subcommand yet. The issue that asked for it ([#43](https://github.com/FullFran/gentle-factory/issues/43), slice 2) is still open, and `cli.go` dispatches only the eight commands above.
 
 ### How `start` and `watch` use the work root
 
@@ -624,6 +625,7 @@ stateDiagram-v2
 | `cmd/factory/main.go` | Entry point; calls `runner.Main`. |
 | `internal/runner/cli.go` | Subcommand dispatch, usage text, `summary`. |
 | `internal/runner/collect.go` | Design gate: parse and validate the block, pin the comment, `done_when` must fail, create `factory/N`. |
+| `internal/runner/design.go` | `design check`: the design gate on a local file, plus the ambiguity-line check. |
 | `internal/runner/run.go` | The receipt-driven loop, retries, guard enforcement, producer commits. |
 | `internal/runner/engine.go` | Agent and code execution, the `claude` command line, env, timeouts, outcome mapping, token accounting. |
 | `internal/runner/guard.go` | Read-only, protected-path and expected-files checks; git helpers. |
@@ -645,7 +647,7 @@ stateDiagram-v2
 | `docs/design/receipt-format.md` | Receipt format, examples, OTLP mapping. |
 | `docs/design/design-comment-template.md` | The design comment spec and template. |
 | `docs/research/delivery-slicing.md` | Research on slicing deliveries. |
-| `tests/` | Deterministic tests: `runner-test.sh`, `pipeline-test.sh`, `start-test.sh`, `report-test.sh`, `panel-test.sh`, `prove-test-test.sh`, `schemas-test.sh`, plus `otlp-receiver/` and `jsonschema-subset.jq`. They use `claude` and `gh` doubles and spend nothing. |
+| `tests/` | Deterministic tests: `runner-test.sh`, `pipeline-test.sh`, `start-test.sh`, `report-test.sh`, `panel-test.sh`, `prove-test-test.sh`, `schemas-test.sh`, `design-check-test.sh`, plus `otlp-receiver/` and `jsonschema-subset.jq`. They use `claude` and `gh` doubles and spend nothing. |
 | `odd/tasks/` | Feature documents used while building the factory. |
 | `.github/ISSUE_TEMPLATE/` | Templates for factory tasks, epics and bugs. |
 

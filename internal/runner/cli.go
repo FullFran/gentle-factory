@@ -20,6 +20,14 @@ Usage:
       context.json, design.md and issue.md
       to DIR, and create branch factory/N from origin's default branch.
       Exit 1 when the issue is not ready.
+  factory design check FILE [--repo-dir DIR] [--issue N]
+      Verify a design comment saved in FILE before adding factory:ready: the
+      factory-design:v1 block (as collect checks it, with --issue N matched when
+      given) and the closing ambiguity rule line. Needs no gh and no network. With
+      --repo-dir, a clean checkout of the default branch, it also runs done_when there
+      (it must fail with an exit other than 0, 126 or 127) and restores the tree.
+      Last line: DESIGN: status=VALID file=FILE expected_files=K done_when=RED|UNCHECKED
+      or DESIGN: status=INVALID reason=... (exit 1).
   factory run --spec SPEC --repo REPO --context CONTEXT [--run-id ID] [--runs-dir DIR]
       Run (or resume, with --run-id) a factory against a target git repository.
   factory start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]
@@ -97,15 +105,17 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		code, err = cmdPanel(args[1:], stdout, stderr)
 	case "status":
 		code, err = cmdStatus(args[1:], stdout, stderr)
+	case "design":
+		code, err = cmdDesign(args[1:], stdout, stderr)
 	default:
-		err = specErr("unknown command %q (want collect, run, start, watch, report, summary, panel or status)", args[0])
+		err = specErr("unknown command %q (want collect, design, run, start, watch, report, summary, panel or status)", args[0])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
 		}
 		label := "RUN"
-		if args[0] == "start" || args[0] == "watch" || args[0] == "panel" || args[0] == "status" {
+		if args[0] == "start" || args[0] == "watch" || args[0] == "panel" || args[0] == "status" || args[0] == "design" {
 			label = strings.ToUpper(args[0])
 		}
 		fmt.Fprintf(stderr, "%s: status=MISCONFIGURED reason=%s\n", label, strings.Join(strings.Fields(err.Error()), " "))

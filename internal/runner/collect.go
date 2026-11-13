@@ -80,8 +80,10 @@ func parseDesign(body string, issue int) (*Design, error) {
 		return nil, notReadyf("design block: done_when is required")
 	case len(d.ExpectedFiles) == 0:
 		return nil, notReadyf("design block: expected_files needs at least one entry")
-	case d.Issue != nil && *d.Issue != issue:
+	case issue > 0 && d.Issue != nil && *d.Issue != issue:
 		return nil, notReadyf("design is for issue %d, not %d", *d.Issue, issue)
+	case d.Issue != nil && *d.Issue < 1:
+		return nil, notReadyf("design block: issue must be at least 1")
 	case d.GateLevel != "" && d.GateLevel != "light" && d.GateLevel != "standard" && d.GateLevel != "full":
 		return nil, notReadyf("design block: gate_level must be light, standard or full")
 	}
@@ -229,23 +231,34 @@ const doneWhenTimeout = 600
 // checkDoneWhenFails runs the design's done_when at the base: it must fail, or it proves
 // nothing about the change. The checkout is restored afterwards.
 func checkDoneWhenFails(checkout, doneWhen string, stdout io.Writer) error {
-	code, _, _, timedOut := runProcess([]string{"bash", "-c", doneWhen}, checkout, os.Environ(), "", doneWhenTimeout)
-	if _, err := git(checkout, "checkout", "-q", "--", "."); err != nil {
+	code, err := doneWhenRed(checkout, doneWhen)
+	if err != nil {
 		return err
-	}
-	if _, err := git(checkout, "clean", "-q", "-f", "-d"); err != nil {
-		return err
-	}
-	switch {
-	case timedOut:
-		return notReadyf("done_when timed out after %ds before any change", doneWhenTimeout)
-	case code == 0:
-		return notReadyf("done_when already passes before any change, so it cannot prove the issue done")
-	case code == 126 || code == 127:
-		return notReadyf("done_when cannot run (exit %d)", code)
 	}
 	fmt.Fprintf(stdout, "COLLECT: check=done_when status=RED exit=%d\n", code)
 	return nil
+}
+
+// doneWhenRed runs done_when in checkout with bash and returns its exit status when it
+// fails with a usable status (not 0, 126 or 127, and not a timeout). The checkout is
+// restored afterwards.
+func doneWhenRed(checkout, doneWhen string) (int, error) {
+	code, _, _, timedOut := runProcess([]string{"bash", "-c", doneWhen}, checkout, os.Environ(), "", doneWhenTimeout)
+	if _, err := git(checkout, "checkout", "-q", "--", "."); err != nil {
+		return 0, err
+	}
+	if _, err := git(checkout, "clean", "-q", "-f", "-d"); err != nil {
+		return 0, err
+	}
+	switch {
+	case timedOut:
+		return 0, notReadyf("done_when timed out after %ds before any change", doneWhenTimeout)
+	case code == 0:
+		return 0, notReadyf("done_when already passes before any change, so it cannot prove the issue done")
+	case code == 126 || code == 127:
+		return 0, notReadyf("done_when cannot run (exit %d)", code)
+	}
+	return code, nil
 }
 
 // issueComment is the part of a GitHub issue comment the factory reads.

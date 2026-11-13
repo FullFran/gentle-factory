@@ -89,6 +89,7 @@ It builds to one static binary; at run time it needs Git, and agent nodes also n
 ```bash
 go build -o bin/factory ./cmd/factory
 bin/factory collect --repo OWNER/NAME --issue N --checkout /path/to/target --out /path/to/ctx
+bin/factory design check design.md [--repo-dir /path/to/target] [--issue N]
 bin/factory run --spec factory.json --repo /path/to/target --context context.json
 bin/factory run ... --run-id <id>        # resume: completed nodes are skipped
 bin/factory summary --repo /path/to/target [--json]
@@ -96,6 +97,7 @@ bash tests/runner-test.sh                # builds the binary, uses claude and gh
 bash tests/pipeline-test.sh              # the pipeline's code nodes, with doubles
 bash tests/start-test.sh                 # start and watch: clone, run, archive, clean up
 bash tests/status-test.sh                # factory status: JSON and summary from a status file
+bash tests/design-check-test.sh          # factory design check: local design verification, no gh
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -130,6 +132,18 @@ in a clean `--checkout`. Before writing anything it runs the design's `done_when
 branch: it must fail (a `done_when` that already passes, cannot run or times out proves
 nothing), and the checkout is restored afterwards. An issue that is not ready prints `COLLECT: status=NOT_READY
 reason=...` and exits 1. `FACTORY_GH_BIN` overrides `gh`.
+
+**Check a design (#57):** `factory design check FILE [--repo-dir DIR] [--issue N]` verifies a
+design comment saved in `FILE` before `factory:ready` is added, without `gh` or the network.
+It applies the same block checks as `collect` (with `--issue N` the block's `issue`, when
+present, must be `N`; an `issue` below 1 is rejected) and requires the last non-blank line to
+be the exact ambiguity rule. With `--repo-dir`, a clean git checkout of the default branch,
+it also runs `done_when` there exactly as `collect` does, prints
+`DESIGN: check=done_when status=RED exit=N` and restores the tree; it creates no branch.
+The last line is `DESIGN: status=VALID file=FILE expected_files=K done_when=RED|UNCHECKED`
+(exit 0) or `DESIGN: status=INVALID reason=...` (exit 1). A missing or unreadable `FILE`, a
+`--repo-dir` that is not a git repository or not clean, or an unknown subcommand prints
+`DESIGN: status=MISCONFIGURED reason=...` on stderr and exits 2.
 
 Behavior:
 
