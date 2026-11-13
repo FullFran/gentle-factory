@@ -72,6 +72,8 @@ A natural language goal (e.g. "make it work") cannot be verified deterministical
   - `pytest tests/test_receipt.py -k test_validation`
   - `cargo test --test gate_verification`
 
+Before adding the ready signal, run `factory design check design.md --repo-dir DIR` on the comment body saved to a file, with `DIR` a clean checkout of the default branch: it applies the same block checks as `collect`, requires the closing ambiguity rule line and confirms that `done_when` fails there, without `gh`.
+
 ### 3.2 Expected Files (`files_expected`)
 
 Defines the **allowed edit surfaces** for the factory.
