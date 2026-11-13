@@ -42,7 +42,7 @@ Usage:
       ${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json (see README).
       Last line:
       START: status=COMPLETE|STOPPED|NOT_READY|MISCONFIGURED issue=... run=ID archive=DIR
-  factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
+  factory watch [--repo OWNER/NAME ...] [--repos-file FILE ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
       List open issues labelled factory:ready and start each one like "start" (up to
       --slots per pass, default 1; --interval default 60; also --work-root, --archive,
       --spec). Back-pressure: nothing starts while --max-open-prs (default 3) factory
@@ -50,6 +50,8 @@ Usage:
       <work-root>/watch-state.json and a changed design starts again. Locks keep two
       watchers, or two runs of one issue, apart. --once does a single pass.
       The watcher, its queue and its runs are written to the same status file as "start".
+      --repos-file reads one OWNER/NAME per line (blank lines and # comments ignored) once at
+      start; its entries come first, then --repo, and duplicates are dropped.
   factory report --runs-dir DIR --run-id ID --context FILE
       Tell the owner how a run ended: post one issue comment (complete with the
       draft PR link, needs_decision with the question, or stopped with the

@@ -163,14 +163,62 @@ func watchPass(w watchOpts, statePath string, out io.Writer) error {
 	return firstErr
 }
 
+// watchRepoOK is the OWNER/NAME rule shared by --repo and --repos-file entries.
+func watchRepoOK(r string) bool {
+	return strings.Contains(r, "/") && !strings.ContainsAny(r, "# \t\r\n\v\f")
+}
+
+// watchRepos returns the repositories to watch: the entries of each file (in flag order, then
+// line order), then the --repo values, with duplicates dropped keeping the first occurrence.
+// A file holds one OWNER/NAME per line; blank lines, # comment lines and trailing " #..." are ignored.
+func watchRepos(files, repos []string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	add := func(r string) {
+		if !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return nil, specErr("cannot read repos file %s: %v", f, err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			entry := strings.TrimSpace(line)
+			if entry == "" || strings.HasPrefix(entry, "#") {
+				continue
+			}
+			if j := strings.IndexFunc(entry, func(c rune) bool { return c == ' ' || c == '\t' }); j >= 0 {
+				if rest := strings.TrimLeft(entry[j:], " \t"); strings.HasPrefix(rest, "#") {
+					entry = strings.TrimSpace(entry[:j])
+				}
+			}
+			if !watchRepoOK(entry) {
+				return nil, specErr("%s:%d: %q is not OWNER/NAME", f, i+1, entry)
+			}
+			add(entry)
+		}
+	}
+	for _, r := range repos {
+		if !watchRepoOK(r) {
+			return nil, specErr("%q is not OWNER/NAME", r)
+		}
+		add(r)
+	}
+	return out, nil
+}
+
 func cmdWatch(args []string, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var w watchOpts
-	var repos multiFlag
+	var repos, reposFiles multiFlag
 	var interval int
 	w.start.bind(fs)
 	fs.Var(&repos, "repo", "GitHub repository OWNER/NAME to watch (repeatable)")
+	fs.Var(&reposFiles, "repos-file", "file with one OWNER/NAME per line (repeatable); blank lines and # comments are ignored")
 	fs.IntVar(&interval, "interval", 60, "seconds between passes")
 	fs.IntVar(&w.slots, "slots", 1, "issues started per pass")
 	fs.IntVar(&w.maxOpen, "max-open-prs", 3, "start nothing while this many factory draft PRs await review")
@@ -178,15 +226,14 @@ func cmdWatch(args []string, stdout, stderr io.Writer) (int, error) {
 	if err := fs.Parse(args); err != nil {
 		return 0, err
 	}
-	if len(repos) == 0 || fs.NArg() > 0 || w.slots < 1 || w.maxOpen < 1 || interval < 1 {
-		return 0, specErr("watch needs at least one --repo, --slots >= 1, --max-open-prs >= 1 and --interval >= 1, and no positional arguments")
+	all, err := watchRepos(reposFiles, repos)
+	if err != nil {
+		return 0, err
 	}
-	for _, r := range repos {
-		if !strings.Contains(r, "/") || strings.ContainsAny(r, "# ") {
-			return 0, specErr("%q is not OWNER/NAME", r)
-		}
+	if len(all) == 0 || fs.NArg() > 0 || w.slots < 1 || w.maxOpen < 1 || interval < 1 {
+		return 0, specErr("watch needs at least one --repo or --repos-file entry, --slots >= 1, --max-open-prs >= 1 and --interval >= 1, and no positional arguments")
 	}
-	w.repos, w.interval = repos, time.Duration(interval)*time.Second
+	w.repos, w.interval = all, time.Duration(interval)*time.Second
 	if err := w.start.resolve(); err != nil {
 		return 0, err
 	}

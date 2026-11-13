@@ -98,6 +98,7 @@ bash tests/pipeline-test.sh              # the pipeline's code nodes, with doubl
 bash tests/start-test.sh                 # start and watch: clone, run, archive, clean up
 bash tests/status-test.sh                # factory status: JSON and summary from a status file
 bash tests/design-check-test.sh          # factory design check: local design verification, no gh
+bash tests/watch-repos-test.sh           # watch --repos-file and the deploy/ launcher, list and unit
 ```
 
 The spec lists nodes in order; unknown fields are rejected, so a misspelt key
@@ -317,7 +318,7 @@ bin/factory run --spec pipeline/factory.json --repo "$co" --context "$ctx/contex
 
 ```bash
 bin/factory start OWNER/NAME#N [--work-root DIR] [--archive DIR] [--spec FILE] [--keep]
-bin/factory watch --repo OWNER/NAME [--repo ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
+bin/factory watch [--repo OWNER/NAME ...] [--repos-file FILE ...] [--interval SECONDS] [--slots N] [--max-open-prs N] [--once]
 ```
 
 1. Lock the issue (a second run of the same issue is refused) and `gh repo clone` the
@@ -354,6 +355,16 @@ design comment started for each issue is kept in `<work-root>/watch-state.json`,
 same design never starts twice and an edited design starts again. A `watch.lock` keeps
 two watchers apart. Stop a running watcher with Ctrl-C; it exits between passes. The state file is the only
 thing `watch` leaves in the work root. Locks hold the pid of their owner and are taken over when it is dead.
+
+`--repos-file FILE` (repeatable) reads the repositories to watch from a versioned file: one
+`OWNER/NAME` per line; surrounding whitespace, blank lines, `#` comment lines and a trailing
+` # ...` are ignored. Each entry is checked like a `--repo` value; a bad line exits 2 with
+`FILE:LINE`, and an unreadable file exits 2 with `cannot read repos file`. The watched list is
+the file entries (flag order, then line order) followed by the `--repo` values, with duplicates
+dropped; it is what `status.json` reports under `watcher.repositories`. At least one entry is
+required. The file is read once when the watcher starts, so an edit takes effect on the next
+(re)start. `deploy/` holds the versioned list, a launcher and a systemd user unit that restarts
+the watcher (see `deploy/README.md`).
 
 **Status file (#43).** `start` and `watch` keep one small JSON file for the panel at
 `${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json` (mode 0644, directory 0755).
