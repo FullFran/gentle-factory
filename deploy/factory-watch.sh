@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launcher for the gentle-factory watcher, run by the systemd user unit
 # deploy/systemd/gentle-factory-watch.service. Installed as ~/.local/bin/factory-watch.
-# The repositories come from a versioned list (deploy/watched-repos.txt), read once at start.
+# The repositories come from FACTORY_REPOS_FILE (format: deploy/watched-repos.example.txt), read once at start.
 # No timeout and no tee: the unit supervises the process and stdout/stderr go to the journal.
 set -euo pipefail
 

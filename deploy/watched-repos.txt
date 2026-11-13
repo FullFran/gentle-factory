@@ -1,8 +1,0 @@
-# Repositories watched by the factory: the list read by `factory watch --repos-file`.
-# One OWNER/NAME per line; blank lines and # comments are ignored.
-# Read once at watcher start: re-install it and restart the unit after an edit (deploy/README.md).
-FullFran/dotfiles
-FullFran/infra
-FullFran/metaharness
-FullFran/gentle-factory
-FullFran/agent-eval-tui

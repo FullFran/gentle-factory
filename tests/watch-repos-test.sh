@@ -117,14 +117,14 @@ check "launcher: a missing repos file exits 1 without running factory" \
   '[ "$code" = 1 ] && grep -q "repos file not found" <<<"$out" && ! grep -q "^ARGS:" <<<"$out"'
 check "launcher: is executable in git" '[ -x "$launcher" ]'
 
-# --- deploy/watched-repos.txt -------------------------------------------------
+# --- deploy/watched-repos.example.txt -----------------------------------------
 
-five="FullFran/dotfiles FullFran/infra FullFran/metaharness FullFran/gentle-factory FullFran/agent-eval-tui "
-watch --repos-file "$here/deploy/watched-repos.txt"
-check "watched-repos.txt: factory watch reads exactly the five repositories" \
-  '[ "$code" = 0 ] && [ "$(listed)" = "$five" ]'
-check "watched-repos.txt: without comments it is exactly the five repositories" \
-  '[ "$(sed -e "s/[[:space:]]#.*//" -e "/^[[:space:]]*#/d" -e "/^[[:space:]]*\$/d" -e "s/[[:space:]]//g" "$here/deploy/watched-repos.txt" | tr "\n" " ")" = "$five" ]'
+example="example-org/service-api example-org/web-app "
+watch --repos-file "$here/deploy/watched-repos.example.txt"
+check "watched-repos.example.txt: factory watch reads exactly the example repositories" \
+  '[ "$code" = 0 ] && [ "$(listed)" = "$example" ]'
+check "deploy/watched-repos.txt is not versioned (the real list is deployment configuration)" \
+  '[ ! -e "$here/deploy/watched-repos.txt" ]'
 
 # --- deploy/systemd/gentle-factory-watch.service --------------------------------
 

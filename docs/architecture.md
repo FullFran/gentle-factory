@@ -648,7 +648,7 @@ stateDiagram-v2
 | `docs/design/design-comment-template.md` | The design comment spec and template. |
 | `docs/research/delivery-slicing.md` | Research on slicing deliveries. |
 | `tests/` | Deterministic tests: `runner-test.sh`, `pipeline-test.sh`, `start-test.sh`, `report-test.sh`, `panel-test.sh`, `prove-test-test.sh`, `schemas-test.sh`, `design-check-test.sh`, `watch-repos-test.sh`, plus `otlp-receiver/` and `jsonschema-subset.jq`. They use `claude` and `gh` doubles and spend nothing. |
-| `deploy/` | Watcher deployment: `factory-watch.sh` launcher, `watched-repos.txt` (the versioned list for `--repos-file`), `systemd/gentle-factory-watch.service` user unit (`Restart=always`) and an install doc. |
+| `deploy/` | Watcher deployment: `factory-watch.sh` launcher, `watched-repos.example.txt` (format of the `--repos-file` list; the real list is deployment configuration and not versioned here), `systemd/gentle-factory-watch.service` user unit (`Restart=always`) and an install doc. |
 | `odd/tasks/` | Feature documents used while building the factory. |
 | `.github/ISSUE_TEMPLATE/` | Templates for factory tasks, epics and bugs. |
 
