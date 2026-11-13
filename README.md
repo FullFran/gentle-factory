@@ -242,7 +242,8 @@ Derives the terminal state of a run from its receipts (the last receipt decides)
 The comment is deliberately minimal because target repositories can be public: it never includes receipts,
 logs, commands or absolute paths (paths in quoted text become `<path>`, text is capped). Run artifacts stay in
 the receipt store, where `factory panel` shows them. Output is `REPORT: status=posted|already-posted state=...
-issue=OWNER/NAME#N`; exit `0` on success, `2` on missing receipts or context. Test: `bash tests/report-test.sh`.
+issue=OWNER/NAME#N`; exit `0` on success, `2` on missing receipts or context. A `complete` report also removes a stale `factory:needs-decision`
+label, only when the issue carries it. Test: `bash tests/report-test.sh`.
 
 ### Factory panel (#15)
 

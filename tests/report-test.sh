@@ -33,6 +33,7 @@ case "$1 $2" in
     while [ $# -gt 0 ]; do [ "$1" = --body-file ] && body="$2"; shift; done
     cp "$body" "$d/posted-$(ls "$d" | grep -c '^posted-').md"
     jq --rawfile b "$body" '.[0] += [{body:$b}]' "$d/comments.json" >"$d/c.tmp" && mv "$d/c.tmp" "$d/comments.json" ;;
+  "issue view") cat "$d/labels.json" ;;
   "issue edit"|"label create") ;;
   *) echo "gh double: unexpected $*" >&2; exit 1 ;;
 esac
@@ -53,6 +54,7 @@ setup() { # setup NAME -> fresh runs dir $runs and gh double dir
   runs="$scratch/$1-runs"; mkdir -p "$runs/r1/receipts" "$runs/r1/logs"
   export FAKE_GH_DIR="$scratch/$1-gh"; mkdir -p "$FAKE_GH_DIR"
   echo '[[]]' >"$FAKE_GH_DIR/comments.json"
+  echo '{"labels":[]}' >"$FAKE_GH_DIR/labels.json"
   n=0
 }
 add_receipt() { # add_receipt NODE ATTEMPT STATUS TERMINAL_REASON COST NOTES
@@ -84,12 +86,30 @@ check "complete: one comment with the hidden marker" '[ "$(count_posts)" = 1 ] &
 check "complete: PR link, attempts and cost are present" 'grep -q "pull/60" <<<"$(posted)" && grep -q "Attempts: 3" <<<"$(posted)" && grep -q "1.00" <<<"$(posted)"'
 check "complete: factory:ready is removed, nothing added" \
   'grep -q "^issue edit 55 .*--remove-label factory:ready" "$FAKE_GH_DIR/calls" && ! grep -q "add-label" "$FAKE_GH_DIR/calls"'
+check "complete: issue without the label: only factory:ready is removed" \
+  'grep -q "^issue edit 55 -R FullFran/dotfiles --remove-label factory:ready$" "$FAKE_GH_DIR/calls" && ! grep -q "needs-decision" "$FAKE_GH_DIR/calls"'
 
 # --- idempotency ------------------------------------------------------------
 : >"$FAKE_GH_DIR/calls"
 report
 check "idempotent: second report posts nothing" \
   '[ "$code" = 0 ] && grep -q "^REPORT: status=already-posted state=complete" <<<"$out" && [ "$(count_posts)" = 1 ] && ! grep -q "issue comment\|issue edit" "$FAKE_GH_DIR/calls"'
+check "idempotent: re-report makes no issue view call" \
+  '! grep -q "issue view\|issue edit\|label create" "$FAKE_GH_DIR/calls"'
+
+# --- complete on an issue that still carries factory:needs-decision ------------
+setup complete-stale
+add_receipt plan 1 success completed 0.25 ""
+add_receipt implement 1 failure step_failed 0.5 $'reason: tests red'
+add_receipt implement 2 success completed 0.25 ""
+echo '{"labels":[{"name":"factory:ready"},{"name":"factory:needs-decision"}]}' >"$FAKE_GH_DIR/labels.json"
+report
+check "complete: stale factory:needs-decision is removed" \
+  '[ "$code" = 0 ] && grep -q "^issue edit 55 -R FullFran/dotfiles --remove-label factory:ready --remove-label factory:needs-decision$" "$FAKE_GH_DIR/calls" && ! grep -q "label create\|add-label" "$FAKE_GH_DIR/calls"'
+: >"$FAKE_GH_DIR/calls"
+report
+check "complete-stale: re-report posts nothing and makes no issue view, issue edit or label create call" \
+  '[ "$code" = 0 ] && grep -q "^REPORT: status=already-posted state=complete" <<<"$out" && [ "$(count_posts)" = 1 ] && ! grep -q "issue view\|issue edit\|label create" "$FAKE_GH_DIR/calls"'
 
 # --- needs_decision ---------------------------------------------------------
 setup decision

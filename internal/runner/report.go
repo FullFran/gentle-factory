@@ -201,6 +201,27 @@ func updateLabels(repo string, issue int, state string) error {
 		}
 		args = append(args, "--add-label", needsDecisionLabel)
 	}
+	if state == "complete" {
+		// Remove a stale needs-decision label, but only when present: gh fails on unknown labels.
+		out, err := gh("issue", "view", fmt.Sprint(issue), "-R", repo, "--json", "labels")
+		if err != nil {
+			return err
+		}
+		var view struct {
+			Labels []struct {
+				Name string `json:"name"`
+			} `json:"labels"`
+		}
+		if err := json.Unmarshal(out, &view); err != nil {
+			return specErr("cannot read labels JSON: %v", err)
+		}
+		for _, l := range view.Labels {
+			if l.Name == needsDecisionLabel {
+				args = append(args, "--remove-label", needsDecisionLabel)
+				break
+			}
+		}
+	}
 	_, err := gh(args...)
 	return err
 }
