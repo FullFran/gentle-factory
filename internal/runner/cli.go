@@ -46,7 +46,8 @@ Usage:
       Tell the owner how a run ended: post one issue comment (complete with the
       draft PR link, needs_decision with the question, or stopped with the
       reason; idempotent through a hidden marker), swap labels (needs_decision:
-      factory:ready -> factory:needs-decision; otherwise drop factory:ready) and
+      factory:ready -> factory:needs-decision; complete: drop factory:ready and
+      a stale factory:needs-decision; stopped: drop factory:ready) and
       pipe a short message to $FACTORY_NOTIFY_CMD when set. Never posts receipts,
       logs, commands or absolute paths. Exit 2 on missing receipts or context.
   factory summary [--repo REPO] [--runs-dir DIR] [--json]
