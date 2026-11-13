@@ -5,7 +5,7 @@
 | Status | draft |
 | Version | 0.1.0-draft |
 | Date | 2026-11-10 |
-| Context | S2 (`factory-v1-night.md`), gentle-factory#1 |
+| Context | S2 (`factory-v1-night.md`), archived issue 1 |
 | Replaces | None |
 
 ---
@@ -106,7 +106,7 @@ Every node operates under an explicit inputs/outputs boundary.
 | Input Field | Source | Description |
 |---|---|---|
 | `workspace_path` | Runner | Absolute path to the isolated git worktree for this execution. |
-| `issue_ref` | Runner | Target repository name and issue number (e.g., `FullFran/gentle-factory#1`). |
+| `issue_ref` | Runner | Target repository name and issue number (e.g., `an archived design issue`). |
 | `design_snapshot` | Issue | Frozen design comment identifier, last updated timestamp, and SHA-256 digest of comment body. |
 | `upstream_receipts` | Receipt Store | Ordered list of all preceding verified receipts for the current run. |
 | `parameters` | Factory Spec | Node-specific configuration (e.g. `gate_level`, `test_command`). |
@@ -264,7 +264,7 @@ The first node in every gentle-factory run is the design gate.
 | **DoorDash agentic-orchestrator** | Harness-owned completion receipts | VERIFIED | `internal/agent/completion_protocol.go:14-40` (repo commit `ea4f920`) |
 | **AWS ABCA** | Cedar hard-deny policies for read-only roles | VERIFIED | `agent/policies/hard_deny.cedar:15-37` (repo commit `c8fcdb0`) |
 | **AWS ABCA** | Stuck guard on repeated tool failures | VERIFIED | `agent/src/stuck_guard.py:1-30` |
-| **Claude Code Headless** | CLI flags `--max-turns`, `--max-budget-usd`, `--output-format json` | VERIFIED | Empirical test on 2026-11-10 recorded in gentle-factory#1 |
+| **Claude Code Headless** | CLI flags `--max-turns`, `--max-budget-usd`, `--output-format json` | VERIFIED | Empirical test on 2026-11-10 recorded in archived issue 1 |
 | **gentle-ai 4.4.0** | Non-interactive review consent `--consent granted` | VERIFIED | CLI test `gentle-ai review start --help` on 2026-11-10 |
 | **in-toto Attestation Framework** | Statement v1.0 specification | VERIFIED | https://github.com/in-toto/attestation/blob/main/spec/v1.0/statement.md |
 | **OpenTelemetry** | GenAI Semantic Conventions | VERIFIED | https://opentelemetry.io/docs/specs/semconv/gen-ai/ |

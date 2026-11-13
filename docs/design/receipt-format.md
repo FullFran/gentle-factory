@@ -5,7 +5,7 @@
 | Status | draft |
 | Version | 0.1.0-draft |
 | Date | 2026-11-10 |
-| Context | S2 (`factory-v1-night.md`), gentle-factory#1 |
+| Context | S2 (`factory-v1-night.md`), archived issue 1 |
 | Replaces | None |
 
 ---

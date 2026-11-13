@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Contract tests for `factory report` (gentle-factory#15), through its public CLI.
+# Contract tests for `factory report` (archived issue 15), through its public CLI.
 # Receipts are written as minimal in-toto statements; gh is a double that records its calls.
 # Needs bash, go and jq. Exit 77 when a tool is missing.
 # shellcheck disable=SC2016,SC2034

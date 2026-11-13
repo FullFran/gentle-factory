@@ -6,9 +6,9 @@
     {
       "id": "dev.fullfran.gentle-factory.pipeline",
       "version": "0.1.0",
-      "contentHash": "sha256:70db219d3d0b67c98b04035fe3856392cea421a40d36ad7bd30fecac0c896dd7",
-      "contentId": "sha256:b3a33bec25e7d1250cd49da78d82a4a2a53665f531c51e2a7e8d15306121682a",
-      "size": 4469,
+      "contentHash": "sha256:71c9e1262e34d1c47e9521efc175c9d005438aad8ff4bcab4ecb7242d3576bbb",
+      "contentId": "sha256:830b6e65717244122274da7cbff1ac8ee6c97daaedb75c19859709f17245c62e",
+      "size": 4489,
       "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
       "contributions": [
         {

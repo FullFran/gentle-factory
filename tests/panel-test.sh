@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Contract tests for `factory panel` (gentle-factory#15), through its public CLI and JSON API.
+# Contract tests for `factory panel` (archived issue 15), through its public CLI and JSON API.
 # Receipts are minimal in-toto statements; the panel serves them on a loopback port picked by
 # the kernel and must never write to a runs dir.
 # Needs bash, go, curl and jq. Exit 77 when a tool is missing.

@@ -5,7 +5,7 @@
 | Status | draft |
 | Version | 0.1.0-draft |
 | Date | 2026-11-10 |
-| Context | S3 (`factory-v1-night.md`), gentle-factory#1 |
+| Context | S3 (`factory-v1-night.md`), archived issue 1 |
 | Replaces | None |
 
 ---
@@ -119,7 +119,7 @@ To prevent the factory from acting on incomplete drafts, the run will not begin 
 
 ### 4.3 Automated Review Consent Interaction
 
-Under the gentle-factory consent policy (decided 2026-11-10 in gentle-factory#1), the presence of the `factory:ready` signal pre-grants unattended review consent:
+Under the gentle-factory consent policy (decided 2026-11-10 in archived issue 1), the presence of the `factory:ready` signal pre-grants unattended review consent:
 - **Medium or High risk**: Automatically granted (outside-in audit).
 - **Item 3 (Contract change)**: Granted, and flags the generated draft PR with the `contract-change` label for human attention.
 - **Item 1 (Data mutation) or Item 2 (Security change)**: Granted for evaluation, but the runner stops before opening the PR and notifies the human maintainer.
@@ -217,13 +217,13 @@ Draft the foundational node contract, receipt format, and issue design comment t
 - `schemas/*.schema.json`: Formal JSON Schema 2020-12 contract schemas.
 
 ## 4. Decisions Already Taken
-- **Flow driven by receipts**: No LangGraph; the next node is the first without a completion receipt (gentle-factory#1).
+- **Flow driven by receipts**: No LangGraph; the next node is the first without a completion receipt (archived issue 1).
 - **Standards philosophy**: "What would the Linux Foundation do": in-toto Statement v1.0, CloudEvents v1.0.2, OpenTelemetry GenAI conventions, JSON Schema 2020-12.
 - **Reference, never copy**: Receipts reference issue numbers, comment SHA-256 hashes, and commit SHAs; they never duplicate full texts.
 - **Unattended consent policy**: Medium/high risk grants automatically; item 3 marks PR `contract-change`; items 1/2 stop and alert.
 
 ## 5. Non-Goals
-- Do not implement the runner runtime execution code (owned by FullFran/factory#2).
+- Do not implement the runner runtime execution code (owned by archived issue 2).
 - Do not implement receipt storage backend (handled by storage research worker).
 - Do not modify existing main branch code.
 
@@ -243,4 +243,4 @@ Draft the foundational node contract, receipt format, and issue design comment t
 | **Cole Medin (ai-software-factory)** | Vague specs cause edge-case failures | VERIFIED | `docs/incidents.md` incidents 10-12, 10-21 (repo commit `f6d8f69`) |
 | **Cole Medin (Video 2)** | "Owner Decisions" queue for agent ambiguity | VERIFIED | YouTube caption track at 01:43, 08:46 (`youtu.be/YHKuUjicB3M`) |
 | **design issue** | Decision: human intervention only in design | VERIFIED | Owner verbatim quote in the design issue (2026-11-10) |
-| **gentle-factory#1** | Decision: unattended review consent policy | VERIFIED | gentle-factory#1 issue comment (2026-11-10) |
+| **archived issue 1** | Decision: unattended review consent policy | VERIFIED | archived issue 1 issue comment (2026-11-10) |

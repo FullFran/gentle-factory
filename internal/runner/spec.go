@@ -109,7 +109,7 @@ type Context struct {
 	Issue         *IssueRef      `json:"issue"`
 	DesignComment *DesignComment `json:"design_comment"`
 	TaskID        string         `json:"task_id,omitempty"`
-	// Set by `factory collect` from the design comment (gentle-factory#3).
+	// Set by `factory collect` from the design comment (archived issue 3).
 	DoneWhen      string   `json:"done_when,omitempty"`
 	ExpectedFiles []string `json:"expected_files,omitempty"`
 	DesignFile    string   `json:"design_file,omitempty"`
