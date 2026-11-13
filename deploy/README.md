@@ -15,7 +15,7 @@ in git.
 Installing is a manual step on the box, outside any factory run. From a checkout of this
 repository:
 
-1. Stop the old `~/work/start-factory.sh` watcher first: only one watcher can hold `watch.lock`.
+1. Stop any previous watcher first: only one watcher can hold `watch.lock`.
 2. Install the files:
 
    ```bash

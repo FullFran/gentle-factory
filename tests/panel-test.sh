@@ -31,7 +31,7 @@ add_receipt() { # add_receipt RUNS RUN NODE ATTEMPT STATUS TERMINAL_REASON COST 
     --arg notes "$8" --arg sig "${9:-}" \
     '{_type:"https://in-toto.io/Statement/v1",subject:[],predicateType:"x",predicate:{version:"0.1.0",run_id:$run,
       step:{node_id:$id,node_kind:"agent",attempt:$att},
-      references:{repository:"FullFran/dotfiles",issue:{number:55,url:"https://github.com/FullFran/dotfiles/issues/55"},
+      references:{repository:"FullFran/sample-app",issue:{number:55,url:"https://github.com/FullFran/sample-app/issues/55"},
         vcs:{base_commit:"aaaa",head_commit:"bbbb"}},
       execution:{engine:"claude-code",tools_allowed:[],caps:{timeout_seconds:1}},
       telemetry:{total_cost_usd:$cost,duration_ms:1000,num_turns:3,request_model:"claude-fake-1",
@@ -50,7 +50,7 @@ add_receipt "$runs" rc implement 2 success completed 0.5 ""
 add_receipt "$runs" rc tests 2 success completed 0 ""
 add_receipt "$runs" rc review 1 success completed 0.25 ""
 add_receipt "$runs" rc output 1 success completed 0 ""
-printf 'noise\nPR: https://github.com/FullFran/dotfiles/pull/60\n' >"$runs/rc/logs/output-1.log"
+printf 'noise\nPR: https://github.com/FullFran/sample-app/pull/60\n' >"$runs/rc/logs/output-1.log"
 printf 'implement attempt 2 log\n' >"$runs/rc/logs/implement-2.log"
 mkdir -p "$runs/rc/outputs"
 printf 'IMPLEMENT ANSWER\n' >"$runs/rc/outputs/implement.md"
@@ -105,7 +105,7 @@ check "runs: every run of both runs dirs is listed" '[ "$(jq ".runs | length" <<
 check "runs: complete, needs_decision, stopped and running" \
   '[ "$(status_of rc)" = complete ] && [ "$(status_of rd)" = needs_decision ] && [ "$(status_of rs)" = stopped ] && [ "$(status_of rr)" = running ]'
 check "runs: repository, issue, attempts and cost" \
-  '[ "$(jq -c ".runs[] | select(.run_id==\"rc\") | [.repository,.issue.number,.attempts,.cost_usd]" <<<"$out")" = "[\"FullFran/dotfiles\",55,7,1.5]" ]'
+  '[ "$(jq -c ".runs[] | select(.run_id==\"rc\") | [.repository,.issue.number,.attempts,.cost_usd]" <<<"$out")" = "[\"FullFran/sample-app\",55,7,1.5]" ]'
 check "runs: totals across runs reuse the summary numbers" \
   '[ "$(jq -c "[.totals.runs,.totals.attempts,.totals.failures,.totals.decisions,.totals.retries]" <<<"$out")" = "[6,20,5,1,4]" ]'
 check "runs: a checker failure with its retry pending is running, the same failure twice is stopped" \
@@ -122,7 +122,7 @@ check "run: the review -> implement retry edge exists but was not taken" \
 check "run: implement shows two attempts and the last node is marked" \
   '[ "$(jq ".graph.nodes[] | select(.id==\"implement\") | .attempts | length" <<<"$out")" = 2 ] && [ "$(jq -r .graph.current <<<"$out")" = output ]'
 check "run: PR link and per-node totals" \
-  '[ "$(jq -r .run.pr_url <<<"$out")" = https://github.com/FullFran/dotfiles/pull/60 ] && [ "$(jq .nodes.implement.retries <<<"$out")" = 1 ]'
+  '[ "$(jq -r .run.pr_url <<<"$out")" = https://github.com/FullFran/sample-app/pull/60 ] && [ "$(jq .nodes.implement.retries <<<"$out")" = 1 ]'
 
 out="$(api "/api/runs/$rc_path/attempts/implement/2")"
 check "attempt: receipt, output, log and the feedback that sent it back" \

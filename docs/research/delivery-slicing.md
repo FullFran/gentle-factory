@@ -125,7 +125,7 @@ In `gentle-factory`, node flow is receipt-driven: **the next node to run is the 
 
 #### Recommended Strategy: Dual-Layer In-Git Receipts
 - **Active Execution:** Runner writes completion receipts to `odd/runs/<run-id>/receipt-<node-id>.json` on the active feature branch. Resumption reads this folder directly: the runner executes the first node lacking a receipt.
-- **V1 Publication Policy:** Retain `odd/runs/<run-id>/` on the feature branch. For internal repos (`FullFran/dotfiles`), receipts in the draft PR provide full transparency.
+- **V1 Publication Policy:** Retain `odd/runs/<run-id>/` on the feature branch. For internal repositories, receipts in the draft PR provide full transparency.
 - **Future Clean Policy (v1.1+):** Push receipts to an orphan `factory-runs` branch upon draft PR publication, removing the folder from the code PR head.
 
 ---

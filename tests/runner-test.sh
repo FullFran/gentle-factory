@@ -95,9 +95,9 @@ new_repo() { # new_repo NAME -> path of a clean repo with one commit and a gate 
 }
 
 cat >"$scratch/context.json" <<'EOF'
-{"repository": "FullFran/dotfiles",
- "issue": {"number": 55, "url": "https://github.com/FullFran/dotfiles/issues/55"},
- "design_comment": {"id": 123, "url": "https://github.com/FullFran/dotfiles/issues/55#issuecomment-123",
+{"repository": "FullFran/sample-app",
+ "issue": {"number": 55, "url": "https://github.com/FullFran/sample-app/issues/55"},
+ "design_comment": {"id": 123, "url": "https://github.com/FullFran/sample-app/issues/55#issuecomment-123",
    "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
    "updated_at": "2026-11-10T01:15:30Z"}}
 EOF
@@ -143,7 +143,7 @@ check "success: deny list passed" \
   'grep -q "\[--disallowedTools\] \[Bash(git push:\*)\] \[Bash(git tag:\*)\] \[Bash(git reset:\*)\] \[Bash(gh:\*)\]" "$FAKE_LOG"'
 run_id="$(receipt "$repo" 1 | jq -r .run_id)"
 check "success: identity reaches the agent (factory#6 attributes)" \
-  'grep -q "OTEL: .*service.name=factory-test,factory.name=test,run.id=$run_id,task.id=FullFran/dotfiles#55,agent.engine=claude-code" "$FAKE_LOG"'
+  'grep -q "OTEL: .*service.name=factory-test,factory.name=test,run.id=$run_id,task.id=FullFran/sample-app#55,agent.engine=claude-code" "$FAKE_LOG"'
 check "success: trace context reaches the agent and the receipt" \
   'grep -q "TRACEPARENT: 00-$(receipt "$repo" 1 | jq -r .telemetry.trace_id)-" "$FAKE_LOG"'
 check "success: agent telemetry recorded from the engine JSON" \
@@ -301,9 +301,9 @@ run "$repo" "$scratch/spec-wrapper.json"
 wrapper_log="$(find "$repo/odd/runs" -name wrapped-1.log)"
 run_id="$(receipt "$repo" 1 | jq -r .run_id)"
 check "fallback: a code node wrapping another engine gets the OTEL attributes with agent.engine=code" \
-  '[ "$code" = 0 ] && grep -q "^OTEL=.*service.name=factory-test,factory.name=test,run.id=$run_id,task.id=FullFran/dotfiles#55,agent.engine=code" "$wrapper_log"'
+  '[ "$code" = 0 ] && grep -q "^OTEL=.*service.name=factory-test,factory.name=test,run.id=$run_id,task.id=FullFran/sample-app#55,agent.engine=code" "$wrapper_log"'
 check "fallback: the same identity arrives as plain FACTORY_* variables" \
-  'grep -qx "IDS=test $run_id FullFran/dotfiles#55 wrapped 1" "$wrapper_log"'
+  'grep -qx "IDS=test $run_id FullFran/sample-app#55 wrapped 1" "$wrapper_log"'
 check "fallback: the receipt keeps run, node, engine and trace for the wrapped engine" \
   '[ "$(receipt "$repo" 1 | jq -r "[.step.node_id,.execution.engine]|join(\",\")")" = "wrapped,bash" ] && grep -q "^TP=00-$(receipt "$repo" 1 | jq -r .telemetry.trace_id)-" "$wrapper_log"'
 

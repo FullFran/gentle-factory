@@ -139,11 +139,11 @@ An agent node executes Claude Code headless to produce a git commit from a desig
       "repository": "FullFran/gentle-factory",
       "issue": {
         "number": 1,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1"
+        "url": "https://github.com/FullFran/sample-app/issues/1"
       },
       "design_comment": {
         "id": 24681357,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
+        "url": "https://github.com/FullFran/sample-app/issues/1#issuecomment-24681357",
         "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
         "updated_at": "2026-11-10T01:15:30Z"
       },
@@ -240,11 +240,11 @@ A deterministic test script validates the working tree and produces a `GREEN` ve
       "repository": "FullFran/gentle-factory",
       "issue": {
         "number": 1,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1"
+        "url": "https://github.com/FullFran/sample-app/issues/1"
       },
       "design_comment": {
         "id": 24681357,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
+        "url": "https://github.com/FullFran/sample-app/issues/1#issuecomment-24681357",
         "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
         "updated_at": "2026-11-10T01:15:30Z"
       },
@@ -312,11 +312,11 @@ A human maintains the design on the issue and applies the `factory:ready` label.
       "repository": "FullFran/gentle-factory",
       "issue": {
         "number": 1,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1"
+        "url": "https://github.com/FullFran/sample-app/issues/1"
       },
       "design_comment": {
         "id": 24681357,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
+        "url": "https://github.com/FullFran/sample-app/issues/1#issuecomment-24681357",
         "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
         "updated_at": "2026-11-10T01:15:30Z"
       }
@@ -364,11 +364,11 @@ When a gate fails, the receipt captures the `RED` verdict and computes a `failur
       "repository": "FullFran/gentle-factory",
       "issue": {
         "number": 1,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1"
+        "url": "https://github.com/FullFran/sample-app/issues/1"
       },
       "design_comment": {
         "id": 24681357,
-        "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
+        "url": "https://github.com/FullFran/sample-app/issues/1#issuecomment-24681357",
         "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
         "updated_at": "2026-11-10T01:15:30Z"
       },
@@ -455,11 +455,11 @@ When receipts are transmitted across networks, event buses, or Orca orchestratio
         "repository": "FullFran/gentle-factory",
         "issue": {
           "number": 1,
-          "url": "https://github.com/FullFran/gentle-factory/issues/1"
+          "url": "https://github.com/FullFran/sample-app/issues/1"
         },
         "design_comment": {
           "id": 24681357,
-          "url": "https://github.com/FullFran/gentle-factory/issues/1#issuecomment-24681357",
+          "url": "https://github.com/FullFran/sample-app/issues/1#issuecomment-24681357",
           "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
           "updated_at": "2026-11-10T01:15:30Z"
         },

@@ -1,10 +1,8 @@
 # gentle-factory
 
-A software factory built from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) pieces, packaged as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A human designs the work in an issue; once the design is marked ready, the factory runs alone up to a draft PR. The factory knows no repository: it is a harness plus input (a designed issue), output (a draft PR) and observability. Everything specific to a repository comes from the issue's design and from the repository itself, read at run time. It is assembled and run by the [metaharness](https://github.com/FullFran/metaharness).
+A software factory built from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) pieces, packaged as composable [HCS](https://github.com/FullFran/hcs) packages: nodes, run adapters and gates. A human designs the work in an issue; once the design is marked ready, the factory runs alone up to a draft PR. The factory knows no repository: it is a harness plus input (a designed issue), output (a draft PR) and observability. Everything specific to a repository comes from the issue's design and from the repository itself, read at run time.
 
 The long-term goal is to list it on gentlehub so the gentle-ai community can use it.
-
-Design: [#1](https://github.com/FullFran/gentle-factory/issues/1) (moved from FullFran/metaharness).
 
 Architecture, flow, components and lifecycles in detail: [docs/architecture.md](docs/architecture.md).
 
@@ -14,12 +12,12 @@ Architecture, flow, components and lifecycles in detail: [docs/architecture.md](
 - **Several engines on different nodes:** Claude Code, Codex or Pi, and agy, each reached through a run adapter.
 - **Orca** carries work between nodes where an agent or a human must be watched or reached remotely; deterministic nodes run as plain code.
 - **Engram** is the shared memory between nodes.
-- **Runs in a disposable workbox** from [FullFran/infra](https://github.com/FullFran/infra).
+- **Runs in a disposable work box** (a container with the agent CLIs, gh and Go).
 - **The harness closes a node, not the agent:** a node completes only when the harness has checked its outputs and written a receipt.
 
 ## Layout
 
-This repository is an HCS catalog root in the metaharness layout, composed with `metaharness ... --source <this repo>`:
+This repository is laid out as an HCS catalog root:
 
 | Path | Contents |
 |---|---|
@@ -297,7 +295,7 @@ embedded in the binary: no build step, no CDN. Test: `bash tests/panel-test.sh`.
 `pipeline/` is the same for every repository (decision in #1: no per-repository layers):
 `plan` (read-only) → `implement` (gets the plan) → `tests` (runs the design's `done_when`) →
 `review` (read-only, a separate claude; `FALLO:` sends the change back) → `output` (pushes
-`factory/<issue>` and opens a **draft** PR with the run's telemetry). Merge waits for Fran.
+`factory/<issue>` and opens a **draft** PR with the run's telemetry). Merge waits for a human.
 
 Where repository knowledge comes from:
 

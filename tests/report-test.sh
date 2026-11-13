@@ -28,7 +28,7 @@ cat >"$scratch/bin/gh" <<'EOF2'
 d="${FAKE_GH_DIR:?}"
 printf '%s\n' "$*" >>"$d/calls"
 case "$1 $2" in
-  "api repos/FullFran/dotfiles/issues/55/comments") cat "$d/comments.json" ;;
+  "api repos/FullFran/sample-app/issues/55/comments") cat "$d/comments.json" ;;
   "issue comment")
     while [ $# -gt 0 ]; do [ "$1" = --body-file ] && body="$2"; shift; done
     cp "$body" "$d/posted-$(ls "$d" | grep -c '^posted-').md"
@@ -43,9 +43,9 @@ export FACTORY_GH_BIN="$scratch/bin/gh"
 unset FACTORY_NOTIFY_CMD
 
 cat >"$scratch/context.json" <<'EOF2'
-{"repository": "FullFran/dotfiles",
- "issue": {"number": 55, "url": "https://github.com/FullFran/dotfiles/issues/55"},
- "design_comment": {"id": 123, "url": "https://github.com/FullFran/dotfiles/issues/55#issuecomment-123",
+{"repository": "FullFran/sample-app",
+ "issue": {"number": 55, "url": "https://github.com/FullFran/sample-app/issues/55"},
+ "design_comment": {"id": 123, "url": "https://github.com/FullFran/sample-app/issues/55#issuecomment-123",
    "sha256": "7a3f8c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
    "updated_at": "2026-11-10T01:15:30Z"}}
 EOF2
@@ -79,15 +79,15 @@ setup complete
 add_receipt plan 1 success completed 0.25 "wrote /home/someone/work/plan.md"
 add_receipt implement 1 failure step_failed 0.5 $'reason: tests red\nsee /home/someone/work/log'
 add_receipt implement 2 success completed 0.25 ""
-printf 'noise\nPR: https://github.com/FullFran/dotfiles/pull/60\n' >"$runs/r1/logs/output-1.log"
+printf 'noise\nPR: https://github.com/FullFran/sample-app/pull/60\n' >"$runs/r1/logs/output-1.log"
 report
-check "complete: exit 0 and REPORT line" '[ "$code" = 0 ] && grep -q "^REPORT: status=posted state=complete issue=FullFran/dotfiles#55$" <<<"$out"'
+check "complete: exit 0 and REPORT line" '[ "$code" = 0 ] && grep -q "^REPORT: status=posted state=complete issue=FullFran/sample-app#55$" <<<"$out"'
 check "complete: one comment with the hidden marker" '[ "$(count_posts)" = 1 ] && grep -qF "<!-- factory-report:v1 run=r1 receipt=3 state=complete -->" <<<"$(posted)"'
 check "complete: PR link, attempts and cost are present" 'grep -q "pull/60" <<<"$(posted)" && grep -q "Attempts: 3" <<<"$(posted)" && grep -q "1.00" <<<"$(posted)"'
 check "complete: factory:ready is removed, nothing added" \
   'grep -q "^issue edit 55 .*--remove-label factory:ready" "$FAKE_GH_DIR/calls" && ! grep -q "add-label" "$FAKE_GH_DIR/calls"'
 check "complete: issue without the label: only factory:ready is removed" \
-  'grep -q "^issue edit 55 -R FullFran/dotfiles --remove-label factory:ready$" "$FAKE_GH_DIR/calls" && ! grep -q "needs-decision" "$FAKE_GH_DIR/calls"'
+  'grep -q "^issue edit 55 -R FullFran/sample-app --remove-label factory:ready$" "$FAKE_GH_DIR/calls" && ! grep -q "needs-decision" "$FAKE_GH_DIR/calls"'
 
 # --- idempotency ------------------------------------------------------------
 : >"$FAKE_GH_DIR/calls"
@@ -105,7 +105,7 @@ add_receipt implement 2 success completed 0.25 ""
 echo '{"labels":[{"name":"factory:ready"},{"name":"factory:needs-decision"}]}' >"$FAKE_GH_DIR/labels.json"
 report
 check "complete: stale factory:needs-decision is removed" \
-  '[ "$code" = 0 ] && grep -q "^issue edit 55 -R FullFran/dotfiles --remove-label factory:ready --remove-label factory:needs-decision$" "$FAKE_GH_DIR/calls" && ! grep -q "label create\|add-label" "$FAKE_GH_DIR/calls"'
+  '[ "$code" = 0 ] && grep -q "^issue edit 55 -R FullFran/sample-app --remove-label factory:ready --remove-label factory:needs-decision$" "$FAKE_GH_DIR/calls" && ! grep -q "label create\|add-label" "$FAKE_GH_DIR/calls"'
 : >"$FAKE_GH_DIR/calls"
 report
 check "complete-stale: re-report posts nothing and makes no issue view, issue edit or label create call" \
@@ -122,13 +122,13 @@ EOF2
 chmod +x "$scratch/bin/notify"
 export NOTIFY_LOG="$scratch/notify.log"; : >"$NOTIFY_LOG"
 report
-check "decision: exit 0 and state needs_decision" '[ "$code" = 0 ] && grep -q "state=needs_decision issue=FullFran/dotfiles#55" <<<"$out"'
+check "decision: exit 0 and state needs_decision" '[ "$code" = 0 ] && grep -q "state=needs_decision issue=FullFran/sample-app#55" <<<"$out"'
 check "decision: comment has node, question and the how-to-answer note" \
   'grep -q "plan" <<<"$(posted)" && grep -q "or copy it?" <<<"$(posted)" && grep -q "factory:ready" <<<"$(posted)"'
 check "decision: label swap, label created if missing" \
-  'grep -q "^label create factory:needs-decision -R FullFran/dotfiles" "$FAKE_GH_DIR/calls" && grep -q "^issue edit 55 -R FullFran/dotfiles --remove-label factory:ready --add-label factory:needs-decision" "$FAKE_GH_DIR/calls"'
+  'grep -q "^label create factory:needs-decision -R FullFran/sample-app" "$FAKE_GH_DIR/calls" && grep -q "^issue edit 55 -R FullFran/sample-app --remove-label factory:ready --add-label factory:needs-decision" "$FAKE_GH_DIR/calls"'
 check "decision: notify command ran once with the message on stdin and no arguments" \
-  '[ "$(grep -c "^ARGS: 0" "$NOTIFY_LOG")" = 1 ] && grep -q "needs_decision" "$NOTIFY_LOG" && grep -q "FullFran/dotfiles#55" "$NOTIFY_LOG"'
+  '[ "$(grep -c "^ARGS: 0" "$NOTIFY_LOG")" = 1 ] && grep -q "needs_decision" "$NOTIFY_LOG" && grep -q "FullFran/sample-app#55" "$NOTIFY_LOG"'
 check "decision: no absolute path in the comment or the notification" \
   '! grep -q "/home/" <<<"$(posted)" && ! grep -q "/home/" "$NOTIFY_LOG"'
 : >"$FAKE_GH_DIR/calls"; : >"$NOTIFY_LOG"
