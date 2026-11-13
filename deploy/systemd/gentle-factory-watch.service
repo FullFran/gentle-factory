@@ -1,0 +1,30 @@
+# systemd USER unit for the gentle-factory watcher (install steps: deploy/README.md).
+#
+# Restart=always: the incident this unit covers was a watcher that ended without anyone
+# noticing. The watcher has no intended self-exit (--once is not used; SIGTERM exits 0 only
+# because systemd asked), so Restart=on-failure would not restart a clean exit 0, which is
+# exactly the silent end to cover. `systemctl --user stop` is never restarted, so the owner
+# keeps control. RestartSec=30 bounds a crash loop (for example a failed `gh auth status`
+# precheck) to one attempt every 30 s, below systemd's start limit.
+#
+# No 20 h timeout: it was a runaway guard that itself caused the outage. Runaways stay bounded
+# by the per-node timeout_seconds and budget caps of pipeline/factory.json, and this unit
+# supervises the process. TimeoutStopSec=3600 lets a run in progress finish on stop/restart
+# (the watcher exits between passes on SIGTERM).
+
+[Unit]
+Description=gentle-factory watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/factory-watch
+# Optional overrides such as ANTHROPIC_MODEL.
+EnvironmentFile=-%h/.config/gentle-factory/watch.env
+Restart=always
+RestartSec=30
+TimeoutStopSec=3600
+
+[Install]
+WantedBy=default.target
