@@ -105,6 +105,13 @@ jq '.slice = true' "$FACTORY_CONTEXT_FILE" >"$scratch/ctx/slice.json"
 out="$(cd "$co" && FACTORY_CONTEXT_FILE="$scratch/ctx/slice.json" bash "$layer/open-pr.sh" "$run_dir" "$base" 2>&1)"; code=$?
 check "output: a slice PR says Part of the issue and does not close it" \
   '[ "$code" = 0 ] && grep -q "^pr create" "$FAKE_GH_CALLS" && grep -q "^Part of #7$" "$FAKE_GH_BODY" && ! grep -q "Closes #7" "$FAKE_GH_BODY"'
+printf 'Done and committed, not pushed.\n\n---\n\nCloses #7\n\n## What changed and why\nResolved the binary.\nFixes #7\n' >"$run_dir/outputs/implement.md"
+: >"$FAKE_GH_CALLS"
+out="$(cd "$co" && FACTORY_CONTEXT_FILE="$scratch/ctx/slice.json" bash "$layer/open-pr.sh" "$run_dir" "$base" 2>&1)"; code=$?
+check "output: the summary's own issue-closing lines are dropped, so a slice never closes the issue" \
+  '[ "$code" = 0 ] && grep -q "^Part of #7$" "$FAKE_GH_BODY" && ! grep -qiE "^(closes|fixes|resolves) #7" "$FAKE_GH_BODY" && grep -q "Resolved the binary." "$FAKE_GH_BODY"'
+check "output: chatter before the summary's first heading is dropped" \
+  '[ "$code" = 0 ] && ! grep -q "not pushed" "$FAKE_GH_BODY" && grep -q "^## What changed and why$" "$FAKE_GH_BODY"'
 
 # Prompt and design-template guidance learned from the first unattended runs.
 template="$here/docs/design/design-comment-template.md"
