@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="#inspired-by-gentle-ai-as-autonomous-as-we-could-make-it">Why</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#write-a-design">Write a design</a> ·
@@ -20,11 +21,36 @@
 
 ---
 
+> **Design it as an issue. The factory does the rest.**
+
 **gentle-factory** turns a designed GitHub issue into a draft pull request, with no human in between.
 
-You do the part that needs judgment: you write the design as a comment on the issue and add the `factory:ready` label. The factory does the rest on its own. It plans, implements, runs your checks, has a second agent review the change, and opens a **draft** PR. Merging is always yours.
+The only thing you write is the design: a comment on the issue that says what to build, what is already decided, and which check proves it done. Then you add the `factory:ready` label. From there the factory works alone. It plans, implements, runs your checks, has a second agent review the change, and opens a **draft** PR. Merging is always yours.
 
 It ships as one static Go binary with the pipeline built in. It knows nothing about your repository in advance. Everything it needs comes from the design and from the repository itself (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, CI and scripts), read at run time.
+
+## Inspired by gentle-ai, as autonomous as we could make it
+
+[gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) gives you an agent team that explores, plans, implements and verifies, with you in the conversation steering every step. gentle-factory asks a different question: **what if the conversation happened once, up front, in the issue?**
+
+| | gentle-ai | gentle-factory |
+|---|---|---|
+| Where you work | In the conversation, with the agents | In the issue, before the run |
+| Your input | Steering, approvals and answers along the way | One design comment and a label |
+| When the agent is unsure | It asks you | It stops with `DECISION:` and waits for a better design |
+| Output | Changes in your working tree | A draft PR, with receipts for every step |
+
+So the design has to carry everything a conversation would have carried. That is the trade: more thinking before the run, no babysitting during it.
+
+The pieces come from the same ecosystem. [Engram](https://github.com/Gentleman-Programming/engram), gentle-ai's persistent memory, is the planned shared memory between nodes, so that what the planner learns reaches the implementer and the reviewer, and what one run learns reaches the next. Today the nodes share state through files and receipts only; see the [roadmap](#roadmap).
+
+## Why this project exists
+
+This is my project to learn how software factories work by designing one. I wanted to understand what it takes for agents to deliver a change unattended: where human judgment cannot be skipped, what has to be checked mechanically rather than trusted, and how to stop a run before it burns budget on a guess.
+
+The factory now builds itself: once the runner worked, new features were written as designed issues and handed to it. **14 of this repository's merged pull requests were opened by the factory** (the ones from `factory/<issue>` branches), each reviewed and merged by a human.
+
+Every decision is written down: in the [architecture](docs/architecture.md), in the [design documents](docs/design/) and in this repository's issues. It is a working tool and a public notebook at the same time. Ideas, questions and criticism are welcome.
 
 ## Why it is built this way
 
@@ -120,6 +146,13 @@ The full format (budgets, caps, slices, gate levels) is in the [design comment t
 | `gates/prove-test.sh` | Prove a new test fails without the fix, in a disposable worktree. |
 
 Every flag, exit code and file format: [docs/reference.md](docs/reference.md).
+
+## Roadmap
+
+- **Engram as shared memory** between nodes and across runs.
+- **A risk node** that classifies the change and applies a consent policy before the PR ([#16](https://github.com/FullFran/gentle-factory/issues/16)).
+- **More engines** per node (Codex, Pi, agy) next to Claude Code, and Orca to carry work between machines.
+- **HCS packages** per node, run adapter and gate, so a factory becomes a composition you can rearrange.
 
 ## Documentation
 
