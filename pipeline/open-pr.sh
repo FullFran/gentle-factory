@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# output node (factory#3 step 6): push factory/<issue> and open a draft PR. Merge waits for Fran.
+# output node (factory#3 step 6): push factory/<issue> and open a draft PR. Merge waits for a human.
 # Usage: open-pr.sh RUN_DIR BASE_COMMIT. Runs in the target checkout. Idempotent on resume.
 set -euo pipefail
 run_dir="$1" base="$2"
