@@ -1,6 +1,6 @@
 # gentle-factory architecture
 
-This document explains how the factory works end to end: what runs, in what order, what it writes down, what stops it, and where it lives. It describes the code on `main`. Where a statement could not be checked in this repository (the workbox, other repositories, planned work) it is marked **Not verified in code** or **Planned**.
+This document explains how the factory works end to end: what runs, in what order, what it writes down, what stops it, and where it lives. It describes the code on `main`. Planned work is marked **Planned**.
 
 Contents:
 
@@ -17,8 +17,8 @@ Contents:
 11. [Slices: Part of versus Closes](#11-slices-part-of-versus-closes)
 12. [Run artefacts and observability](#12-run-artefacts-and-observability)
 13. [The status file and the panel](#13-the-status-file-and-the-panel)
-14. [Where it runs: the workbox](#14-where-it-runs-the-workbox)
-15. [Relation to HCS and the metaharness](#15-relation-to-hcs-and-the-metaharness)
+14. [Where it runs](#14-where-it-runs)
+15. [Relation to HCS and gentle-ai](#15-relation-to-hcs-and-gentle-ai)
 16. [Lifecycles (state diagrams)](#16-lifecycles-state-diagrams)
 17. [Glossary](#17-glossary)
 18. [Where to look](#18-where-to-look)
@@ -116,7 +116,7 @@ flowchart TB
     ARCH[("Archive: ~/.local/share/gentle-factory/runs")]
     STF[("Status: ~/.local/state/gentle-factory/status.json")]
     OTEL["OTLP collector (optional)"]
-    HOSTP["Host: panel-collect + Fabrica tab"]
+    HOSTP["External dashboard (optional)"]
 
     CLI --> WATCH & START & RUN & COLLECT & REP & PAN
     WATCH --> START
@@ -129,7 +129,7 @@ flowchart TB
     START --> ARCH
     PAN -. reads .-> ARCH
     WATCH & START --> STAT --> STF
-    STF -. incus file pull .-> HOSTP
+    STF -. pulled by .-> HOSTP
     PIPE --- SPEC
     START --> PIPE
     COLLECT <--> ISS
@@ -401,7 +401,7 @@ Rules that hold in code:
 - `needs_decision` removes `factory:ready` and adds `factory:needs-decision` (created if missing); `complete` removes `factory:ready` and also removes `factory:needs-decision` when the issue carries it; `stopped` only removes `factory:ready`. That is why the owner must re-add the label: `watch` lists only labelled issues.
 - The previous attempt's branch is never deleted. `start` renames an existing origin `factory/N` to `factory/N-<run_id>` in one atomic push (lease-protected) and starts again from a fresh `factory/N`. If an open PR uses `factory/N`, `start` refuses and changes nothing.
 - The comment never contains receipts, logs, commands or absolute paths (paths in quoted text become `<path>`, text is capped), because target repositories can be public.
-- Where the owner notices a parked decision: the local `factory panel` has a decisions view ordered oldest first (`GET /api/decisions`). `FACTORY_NOTIFY_CMD` is an optional hook and is left unset in the workbox per the decision record in [#15](https://github.com/FullFran/gentle-factory/issues/15).
+- Where the owner notices a parked decision: the local `factory panel` has a decisions view ordered oldest first (`GET /api/decisions`). `FACTORY_NOTIFY_CMD` is an optional hook and is left unset by default per the decision record in [#15](https://github.com/FullFran/gentle-factory/issues/15).
 
 ## 11. Slices: Part of versus Closes
 
@@ -454,7 +454,7 @@ With `OTEL_EXPORTER_OTLP_ENDPOINT` set (a base URL), `factory run` posts one OTL
 
 ## 13. The status file and the panel
 
-`start` and `watch` keep one small file for the host panel at `${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json` (file mode 0644, directory 0755). It is rewritten atomically when a watcher starts, on every pass, when a run starts, on every node transition and when a run ends. Each write starts from the previous file, so runs and day totals survive a watcher restart; an unreadable file is replaced. `factory run` alone, `report`, `summary` and `panel` never write it. A failed write prints `STATUS: write failed reason=...` and never changes a run.
+`start` and `watch` keep one small file for dashboards at `${XDG_STATE_HOME:-$HOME/.local/state}/gentle-factory/status.json` (file mode 0644, directory 0755). It is rewritten atomically when a watcher starts, on every pass, when a run starts, on every node transition and when a run ends. Each write starts from the previous file, so runs and day totals survive a watcher restart; an unreadable file is replaced. `factory run` alone, `report`, `summary` and `panel` never write it. A failed write prints `STATUS: write failed reason=...` and never changes a run.
 
 Schema: [factory-status.schema.json](../schemas/factory-status.schema.json), `schema_version` `"1.0"`, every object closed and every string and array bounded.
 
@@ -469,59 +469,38 @@ Schema: [factory-status.schema.json](../schemas/factory-status.schema.json), `sc
 
 `stop_code` is one of the stop codes in [section 6](#stop-codes) or `other`. The file never holds prompts, outputs, feedback, logs, tokens, issue titles or paths.
 
-```mermaid
-flowchart LR
-    subgraph BOX["Incus box trabajo-2 (user assistant)"]
-        FW["factory watch / start"] -->|"atomic write"| SF[("status.json")]
-    end
-    subgraph HOST["VPS host"]
-        PC["panel-collect (Ansible role, once a minute)"]
-        SNAP[("snapshot v1.11, section factory")]
-    end
-    PANEL["FullFran/panel: Fabrica tab"]
-    SF -- "incus file pull (nothing listens in the box)" --> PC
-    PC -->|"validate, redact, add 'at'"| SNAP --> PANEL
-```
+The status file is meant to be read from outside the machine that runs the factory: a monitoring host can copy it out (pull, never push) and show it on a dashboard, so the factory machine listens on nothing. Treat the copied file as untrusted: read only a regular, non-symlink file of bounded size, check `schema_version`, and keep only the schema's fields.
 
-How the panel's Fábrica tab gets it, as described in the merged pull requests (read from GitHub, **not verified in this repository's code**):
+`factory status [--json]` prints the same file locally. The `factory panel` subcommand is a different tool: a local web UI over receipt stores.
 
-- [FullFran/infra#168](https://github.com/FullFran/infra/pull/168) (merged) adds a `factory` section to the `panel-collect` snapshot (v1.11). Once a minute the host collector copies the file out of the box named by `panel_collect_factory_box` (set to `trabajo-2` in `vps.yml`) with `incus file pull`. The box pushes nothing and listens on nothing.
-- The file is treated as untrusted: only a regular, non-symlink file of at most 256 KiB is read, from a fresh 0700 directory; `schema_version` must be `"1.0"`; only the schema's fields leave; malformed runs are dropped one by one; `stop_detail` is redacted. If the box has no file the section is `{"at": ..., "watcher": null}`; with no box configured, a symlink, an oversized or non-JSON file, or Incus down it is `null`.
-- That change reaches production only through a manual Ansible apply of the `panel_collect` role on the VPS; whether it has been applied is **not verified**.
-- [FullFran/panel#92](https://github.com/FullFran/panel/pull/92) (merged) makes the panel read the status file's own names (`current_run`, `last_runs`, `stop_code`, `pr_number`, queue as numbers) instead of earlier placeholder names, and drops queue titles.
+## 14. Where it runs
 
-The `factory panel` subcommand in this repository is a different, local tool over receipt stores; the Fábrica tab belongs to the separate FullFran/panel project and reads only the status file.
+Run the factory in a disposable machine or container, not on a workstation:
 
-## 14. Where it runs: the workbox
+- Install there the `factory` binary (a static build of `main`), `git`, an authenticated `gh` and `claude`.
+- Give the agents their own Claude Code profile (`FACTORY_CLAUDE_BIN` in [deploy/](../deploy/README.md)), never your interactive configuration: personal output styles and global rules otherwise leak into the pull requests.
+- Use a fine-grained GitHub token limited to the watched repositories (contents, pull requests and issues write, short expiry), not a general login.
+- Until an egress allow-list and a kill switch are in place, run only on trusted input: issues and designs written by people who could already push to the repository.
+- Choose the model with `ANTHROPIC_MODEL`; a per-node `model` key in the spec takes precedence (the embedded spec sets none).
+- Supervise the watcher with the systemd user unit in [deploy/](../deploy/README.md).
 
-Per the decision record in [#5](https://github.com/FullFran/gentle-factory/issues/5) (2026-11-11), the factory runs in a disposable work box from [FullFran/infra](https://github.com/FullFran/infra):
-
-- Box: Incus container `trabajo-2` on the VPS, unix user `assistant`.
-- Installed there: the `factory` binary (static build of `main`), the `claude-factory` agent profile (the factory must not use the owner's interactive config; the first run leaked the output style and global rules into a PR), and `~/work/start-factory.sh`.
-- Credentials are what the user logs in with inside the box. The decision record asks for a fine-grained GitHub token limited to the watched repositories (contents, pull requests and issues write, short expiry), not the owner's general login.
-- The box was set up as an authorised shortcut that skips the infra guards (egress allow-list [infra#45](https://github.com/FullFran/infra/issues/45), kill switch and caps [infra#49](https://github.com/FullFran/infra/issues/49)). Until those exist, the first runs are on trusted input only: issues and designs written by the owner in private repositories.
-
-Operational facts supplied by the owner's brief and **not verifiable from this repository**: the start script `~/work/start-factory.sh` launches the watcher; the model is chosen with the `ANTHROPIC_MODEL` environment variable (the spec's per-node `model` key, if set, takes precedence via `--model`; the embedded spec sets none); logs go to `~/work/factory-logs`.
-
-**Rebuild rule.** `pipeline/embed.go` embeds `factory.json`, `*.md` and `*.sh` with `//go:embed`, and `start` materialises them into a temporary directory per run. So the installed binary carries its own pipeline: **any change to `pipeline/` (spec, prompts or scripts) reaches the box only after rebuilding the binary and installing it there.** Editing files on the box does nothing. Passing `--spec FILE` overrides the embedded pipeline. This also means a binary and its pipeline cannot drift apart, and that `factory panel` draws the pipeline graph from the embedded spec by default.
+**Rebuild rule.** `pipeline/embed.go` embeds `factory.json`, `*.md` and `*.sh` with `//go:embed`, and `start` materialises them into a temporary directory per run. So the installed binary carries its own pipeline: **any change to `pipeline/` (spec, prompts or scripts) reaches the machine only after rebuilding the binary and installing it there.** Editing files on the machine does nothing. Passing `--spec FILE` overrides the embedded pipeline. This also means a binary and its pipeline cannot drift apart, and that `factory panel` draws the pipeline graph from the embedded spec by default.
 
 ```mermaid
 flowchart LR
     DEV["edit pipeline/ in a PR"] --> MERGE["merge to main"]
     MERGE --> BUILD["go build ./cmd/factory (static)"]
-    BUILD --> INST["install the binary in the box"]
+    BUILD --> INST["install the binary"]
     INST --> RESTART["restart the watcher"]
     RESTART --> NEW["next run materialises the new pipeline"]
 ```
 
-Reaching the local panel of a box: keep the loopback bind and forward the port (`ssh -L 8787:127.0.0.1:8787 <box>`); never `--allow-remote`, because the panel has no authentication and logs carry machine paths.
+Reaching the local panel of a remote machine: keep the loopback bind and forward the port (`ssh -L 8787:127.0.0.1:8787 <host>`); never `--allow-remote`, because the panel has no authentication and logs carry machine paths.
 
-## 15. Relation to HCS and the metaharness
+## 15. Relation to HCS and gentle-ai
 
-- [HCS](https://github.com/FullFran/hcs) is the packaging spec the owner wants the factory built from: nodes, run adapters and gates as composable packages in a catalog. The [metaharness](https://github.com/FullFran/metaharness) composes catalogs with `--source <repo>` and keeps `factories/` as the generic place where factory repositories are listed.
-- The README layout table lists `catalog/` ("generated HCS-0001 catalog") and `packages/`. **Neither directory exists on `main`**; today the factory ships as the Go binary with its embedded `pipeline/`, and the HCS packaging is direction, not current state. The runner does not read an HCS catalog.
-- [#49](https://github.com/FullFran/gentle-factory/issues/49) (open, planned) is the first slice towards closing that gap: `go run ./cmd/catalog build` would generate `catalog/catalog.json` with one HCS-0001 entry for the embedded pipeline (content hash, size, content id, one contribution per embedded file), and `check` would exit 1 when `pipeline/` changes without a regenerated catalog. Later slices would validate in CI, add entries for gates, schemas and per-node packages with capability ids (HCS-0002), and consider signed catalogs (HCS-0007) and consuming metaharness entries. **Planned: `cmd/catalog` does not exist yet.**
-- gentle-ai (the community toolkit the owner works with) is a source of pieces, not the engine: the plan is to wrap each piece behind a package that translates its output into a factory receipt. Today no gentle-ai piece runs inside the pipeline; the `risk` node in [#16](https://github.com/FullFran/gentle-factory/issues/16) would be the first (planned).
+- [HCS](https://github.com/FullFran/hcs) is the packaging spec the factory is built towards: nodes, run adapters and gates as composable packages in a catalog. `go run ./cmd/catalog build|check` keeps `catalog/catalog.json`, one HCS-0001 entry for the embedded pipeline, in sync with `pipeline/` ([catalog/README.md](../catalog/README.md)). The runner itself does not read the catalog yet; per-node packages, capability ids and signed catalogs are planned.
+- [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) is a source of pieces, not the engine: the plan is to wrap each piece behind a package that translates its output into a factory receipt. Today no gentle-ai piece runs inside the pipeline; the `risk` node in [#16](https://github.com/FullFran/gentle-factory/issues/16) would be the first (planned).
 - Other engines (Codex, Pi, agy) and Orca as transport between nodes are not implemented. The runner starts each node as a subprocess on one machine and the decision record on [#2](https://github.com/FullFran/gentle-factory/issues/2) defers both until a node must run elsewhere.
 
 ## 16. Lifecycles (state diagrams)
@@ -613,10 +592,8 @@ stateDiagram-v2
 | Slice | A design that delivers part of an issue; its PR says `Part of #N`. |
 | Run | One execution of the pipeline for one issue, identified by `run_<uuid>`. |
 | Archive | Where `start` keeps a run's receipts after the clone is deleted. |
-| Workbox | The disposable Incus box (`trabajo-2`) where the factory runs. |
-| Status file | `status.json`, the bounded view of the watcher for the host panel. |
+| Status file | `status.json`, the bounded view of the watcher for dashboards and `factory status`. |
 | HCS | The packaging spec (catalogs, capabilities) the factory is meant to be assembled from. |
-| Metaharness | The tool that composes HCS catalogs and lists factory repositories. |
 
 ## 18. Where to look
 
@@ -649,7 +626,6 @@ stateDiagram-v2
 | `docs/research/delivery-slicing.md` | Research on slicing deliveries. |
 | `tests/` | Deterministic tests: `runner-test.sh`, `pipeline-test.sh`, `start-test.sh`, `report-test.sh`, `panel-test.sh`, `prove-test-test.sh`, `schemas-test.sh`, `design-check-test.sh`, `watch-repos-test.sh`, plus `otlp-receiver/` and `jsonschema-subset.jq`. They use `claude` and `gh` doubles and spend nothing. |
 | `deploy/` | Watcher deployment: `factory-watch.sh` launcher, `watched-repos.example.txt` (format of the `--repos-file` list; the real list is deployment configuration and not versioned here), `systemd/gentle-factory-watch.service` user unit (`Restart=always`) and an install doc. |
-| `odd/tasks/` | Feature documents used while building the factory. |
 | `.github/ISSUE_TEMPLATE/` | Templates for factory tasks, epics and bugs. |
 
 ## 19. Known gaps and unverified points
@@ -657,12 +633,11 @@ stateDiagram-v2
 Gaps in the code today:
 
 - Design-level `gate_level` is accepted but not applied.
-- No `factory status` subcommand ([#43](https://github.com/FullFran/gentle-factory/issues/43) slice 2).
 - No `risk` node, consent policy, or author check on issue content ([#16](https://github.com/FullFran/gentle-factory/issues/16)).
 - No design-drift abort: the design hash is recorded, not re-checked mid-run.
-- No `catalog/`, `packages/` or `cmd/catalog` ([#49](https://github.com/FullFran/gentle-factory/issues/49)).
+- No `packages/`: the catalog has one entry for the whole embedded pipeline, and the runner does not read it.
 - Only the `claude` engine on agent nodes; no Orca transport, no Engram in the pipeline.
-- The stale-output reaper and stuck guard from node contract section 4.3 are not implemented (README: "Not yet").
+- The stale-output reaper and stuck guard from node contract section 4.3 are not implemented.
 - `human gate` is a node kind in the node-contract document, not in the runner; a human gate today is the `factory:ready` label and the draft PR.
 
-Not verified here (depends on other repositories or on the box): the contents of `~/work/start-factory.sh`, the use of `ANTHROPIC_MODEL`, the log directory `~/work/factory-logs`, whether the infra change that pulls the status file has been applied on the VPS, and whether the Fábrica tab currently shows live data. The completed runs reported on issues (for example the report comments on [#13](https://github.com/FullFran/gentle-factory/issues/13), [#36](https://github.com/FullFran/gentle-factory/issues/36) and [#46](https://github.com/FullFran/gentle-factory/issues/46)) show the pipeline ending in draft PRs at roughly 0.8 to 1.7 USD and 5 attempts each, but this document did not re-run anything.
+The completed runs reported on issues (for example the report comments on [#13](https://github.com/FullFran/gentle-factory/issues/13), [#36](https://github.com/FullFran/gentle-factory/issues/36) and [#46](https://github.com/FullFran/gentle-factory/issues/46)) show the pipeline ending in draft PRs at roughly 0.8 to 1.7 USD and 5 attempts each.

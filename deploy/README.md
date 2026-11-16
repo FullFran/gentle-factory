@@ -1,21 +1,21 @@
 # deploy/
 
-Files that run the factory watcher on the execution box under a systemd user unit, so a
+Files that run the factory watcher on the machine that executes runs, under a systemd user unit, so a
 watcher that ends for any reason comes back and the list of watched repositories is reviewed
 in git.
 
 | File | Purpose |
 | --- | --- |
 | `factory-watch.sh` | Launcher: checks `gh auth status` and the repository list, then `exec factory watch --repos-file FILE --interval 120`. Overrides: `FACTORY_BIN`, `FACTORY_GH_BIN`, `FACTORY_REPOS_FILE`, `FACTORY_INTERVAL`, `FACTORY_CLAUDE_BIN` (default `claude-factory`), `ANTHROPIC_MODEL` (default `claude-opus-5-5`). |
-| `watched-repos.example.txt` | Example of the repository list, one `OWNER/NAME` per line. The real list is deployment configuration: keep it outside this repository (for example in the private configuration that provisions the box) and install it as `~/.config/gentle-factory/watched-repos.txt`. |
+| `watched-repos.example.txt` | Example of the repository list, one `OWNER/NAME` per line. The real list is deployment configuration: keep it outside this repository (for example in the configuration that provisions the machine) and install it as `~/.config/gentle-factory/watched-repos.txt`. |
 | `systemd/gentle-factory-watch.service` | The user unit: `Restart=always`, `RestartSec=30`, no timeout. |
 
-## Install (manual, by the owner)
+## Install
 
-Installing is a manual step on the box, outside any factory run. From a checkout of this
+Installing is a manual step on that machine, outside any factory run. From a checkout of this
 repository:
 
-1. Stop the old `~/work/start-factory.sh` watcher first: only one watcher can hold `watch.lock`.
+1. Stop any watcher already running there: only one watcher can hold `watch.lock`.
 2. Install the files:
 
    ```bash
@@ -24,9 +24,11 @@ repository:
    ```
 
 3. Write the repository list to `~/.config/gentle-factory/watched-repos.txt`, starting from
-   `deploy/watched-repos.example.txt`, or let your box provisioning write it.
+   `deploy/watched-repos.example.txt`, or let your provisioning write it.
 4. Optional overrides (for example `ANTHROPIC_MODEL=...`) go in
-   `~/.config/gentle-factory/watch.env`.
+   `~/.config/gentle-factory/watch.env`. The launcher expects a `claude-factory` command: a
+   wrapper that runs Claude Code with a profile of its own, so your personal configuration
+   never reaches the agents. To use plain `claude`, set `FACTORY_CLAUDE_BIN=claude` there.
 5. Enable and start the unit, and keep the user manager running after logout:
 
    ```bash

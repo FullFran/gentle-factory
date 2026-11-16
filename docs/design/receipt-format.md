@@ -12,8 +12,8 @@
 
 ## 1. Architectural Philosophy: "What Would the Linux Foundation Do?"
 
-The user design directive for `gentle-factory` establishes:
-> *«lo más standard inspirado en cosas que ya se usan y funcionan un "qué haría la linux fundation"»*
+The design directive for `gentle-factory` is:
+> *As standard as possible, inspired by things that are already used and work: "what would the Linux Foundation do".*
 
 When building verifiable software supply chains, continuous delivery pipelines, and event-driven architectures, the Linux Foundation, OpenSSF, and Cloud Native Computing Foundation (CNCF) do not invent bespoke, proprietary formats. Instead, they combine established specifications:
 
