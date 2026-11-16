@@ -13,7 +13,7 @@
 ## 1. Purpose & Principles
 
 The core operational thesis of `gentle-factory` is:
-> *«el objetivo es conseguir un gentle-ai pero que la intervención humana solo esté en el diseño, se deje el diseño como comentario en issue y una vez se considera que tiene suficiente diseño que funcione solo hasta tener una pr en draft.»* (Fran, 2026-11-10, gentle-factory#1)
+> *Human intervention happens only in the design: the design is left as a comment on the issue, and once it is judged complete enough, the factory runs on its own up to a draft PR.* (decision in gentle-factory#1)
 
 To achieve reliable autonomous execution without human micromanagement, human judgment is concentrated in the **Design Comment** posted on the GitHub issue. The factory consumes this design comment as its sole immutable specification.
 
@@ -223,7 +223,7 @@ Draft the foundational node contract, receipt format, and issue design comment t
 - **Unattended consent policy**: Medium/high risk grants automatically; item 3 marks PR `contract-change`; items 1/2 stop and alert.
 
 ## 5. Non-Goals
-- Do not implement the runner runtime execution code (owned by FullFran/factory#2).
+- Do not implement the runner runtime execution code (owned by gentle-factory#2).
 - Do not implement receipt storage backend (handled by storage research worker).
 - Do not modify existing main branch code.
 
@@ -242,5 +242,5 @@ Draft the foundational node contract, receipt format, and issue design comment t
 | **addyosmani/factory** | Disposition labels (`factory:<disposition>`) | VERIFIED | `QUEUE.md:46-60` |
 | **Cole Medin (ai-software-factory)** | Vague specs cause edge-case failures | VERIFIED | `docs/incidents.md` incidents 10-12, 10-21 (repo commit `f6d8f69`) |
 | **Cole Medin (Video 2)** | "Owner Decisions" queue for agent ambiguity | VERIFIED | YouTube caption track at 01:43, 08:46 (`youtu.be/YHKuUjicB3M`) |
-| **gentle-factory#1** | Decision: human intervention only in design | VERIFIED | Fran verbatim quote in gentle-factory#1 (2026-11-10) |
+| **gentle-factory#1** | Decision: human intervention only in design | VERIFIED | Owner quote in gentle-factory#1 (2026-11-10) |
 | **gentle-factory#1** | Decision: unattended review consent policy | VERIFIED | gentle-factory#1 issue comment (2026-11-10) |

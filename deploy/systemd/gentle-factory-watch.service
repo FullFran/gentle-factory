@@ -3,7 +3,7 @@
 # Restart=always: the incident this unit covers was a watcher that ended without anyone
 # noticing. The watcher has no intended self-exit (--once is not used; SIGTERM exits 0 only
 # because systemd asked), so Restart=on-failure would not restart a clean exit 0, which is
-# exactly the silent end to cover. `systemctl --user stop` is never restarted, so the owner
+# exactly the silent end to cover. `systemctl --user stop` is never restarted, so the operator
 # keeps control. RestartSec=30 bounds a crash loop (for example a failed `gh auth status`
 # precheck) to one attempt every 30 s, below systemd's start limit.
 #

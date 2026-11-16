@@ -12,7 +12,7 @@ body:
     attributes:
       label: Why
       description: The problem, with the requester's words quoted verbatim and dated.
-      placeholder: 'Fran (verbatim, YYYY-MM-DD): "..."'
+      placeholder: 'Requester (verbatim, YYYY-MM-DD): "..."'
     validations:
       required: true
   - type: textarea

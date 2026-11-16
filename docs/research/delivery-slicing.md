@@ -121,7 +121,7 @@ In `gentle-factory`, node flow is receipt-driven: **the next node to run is the 
 #### Candidate Storage Options
 1. **Feature Folder (`odd/runs/<run>/`):** On-branch; travels with git; zero dependencies. Tradeoff: Appears in PR diffs unless stripped.
 2. **Dedicated Branch (`factory-runs`):** Isolates state from code diffs; survives container wipes. Tradeoff: Requires branch switching during execution.
-3. **Store Outside Git (SQLite / DB):** Clean git history; fast transactions. Tradeoff: Ephemeral in disposable workboxes (`trabajo-N`); lost on box destruction.
+3. **Store Outside Git (SQLite / DB):** Clean git history; fast transactions. Tradeoff: Ephemeral in disposable workboxes; lost on box destruction.
 
 #### Recommended Strategy: Dual-Layer In-Git Receipts
 - **Active Execution:** Runner writes completion receipts to `odd/runs/<run-id>/receipt-<node-id>.json` on the active feature branch. Resumption reads this folder directly: the runner executes the first node lacking a receipt.
